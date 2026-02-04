@@ -1,14 +1,12 @@
 """
+1. GNN0
 Author: Yixi Zhang
-1. NeuralNetwork0.
 Here a basic GNN is constructed using all default values of the chemprop module:
     *  mp_hidden_dim = 300
     *  depth (mp) = 3
     *  ffn_hidden_dim = 300
     *  ffn_hidden_layers = 3
 The data used here are fetched from RepoRT, in concrete, the first 40 Repos' data are used to train the GNN.
-Those hyperparameters are tunable using various algorithm, so deeper investigation onto that is required.
-In the future, other GNN architectures will be constructed and tried for efficiency.
 References:
     https://chemprop.readthedocs.io/en/main/training.html
     https://github.com/chemprop/chemprop/blob/main/examples/training.ipynb
