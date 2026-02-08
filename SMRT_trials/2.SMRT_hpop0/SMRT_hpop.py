@@ -124,7 +124,7 @@ sorted_results = clean_results.sort_values(by = ["val_loss"]).reset_index (drop 
 sorted_results ["val_loss"] = round (sorted_results ["val_loss"], 4)
 filename = "C:/Users/leonz/PyCharmMiscProject/TFG/SMRT_trials/Results_SMRT_hpop0.txt"
 with open(filename, "w") as f:
-    f.write (final_res.to_string())
+    f.write (sorted_results.to_string())
 
 
 
