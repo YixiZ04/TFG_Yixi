@@ -67,7 +67,7 @@ test_dset = data.MoleculeDataset(test_data [0], featurizer)
 
 # DataLoaders
 train_loader = data.build_dataloader (train_dset, num_workers = 5, shuffle = True, persistent_workers = True)
-val_loader = data.build_dataloader (val_dset, num_workers = 5, shuffle = True, persistent_workers = True)
+val_loader = data.build_dataloader (val_dset, num_workers = 5, shuffle = False, persistent_workers = True)
 
 # 5. Define the objective function for hyperparameters optimization with Optuna
 
