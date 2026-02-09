@@ -6,8 +6,8 @@ Basic hyperparameters optimization is conducted using Optuna. These hyperparamet
     2. ffn_hidden_size: [300, 2400]
     3. ffn_layers: [1,3]
     4. dropout_rate: [0.1, 0.5, step=0.1]
-    5. init_lr: [1e-5, 1e-4]
-    6. max_lr: [1e-3, 1e-2]
+    5. init_lr: [1e-5, 1e-4, step=1e-5]
+    6. max_lr: [1e-4, 1e-2, step=1e-3]
 Warm_up_epochs used the default value: 2
 The data used here is from METLIN SMRT (Domingo-Almenara et al., 2019).
 """
@@ -77,8 +77,8 @@ def objective (trial):
     ffn_hidden_dim = trial.suggest_int ("ffn_hidden_dim", 300, 2400, log=True)
     ffn_layers = trial.suggest_int ("ffn_layers", 1, 3)
     dropout_rate = trial.suggest_float ("dropout_rate", 0.1, 0.5, step=0.1)
-    init_lr = trial.suggest_float ("init_lr",1e-5, 1e-4, log=True)
-    max_lr = trial.suggest_float ("max_lr", 1e-3, 1e-2, log=True)
+    init_lr = trial.suggest_float ("init_lr",1e-5, 1e-4, log=True, step=1e-5)
+    max_lr = trial.suggest_float ("max_lr", 1e-3, 1e-2, log=True, step=1e-3)
 
     # Model
     mp = nn.BondMessagePassing(d_h=mp_hidden_dim)
@@ -114,7 +114,7 @@ def objective (trial):
 # 6. Create Optuna study object
 
 study = optuna.create_study (direction = "minimize")
-study.optimize (objective, n_trials = 1000)
+study.optimize (objective, n_trials = 20)
 
 #7. Get the results
 
