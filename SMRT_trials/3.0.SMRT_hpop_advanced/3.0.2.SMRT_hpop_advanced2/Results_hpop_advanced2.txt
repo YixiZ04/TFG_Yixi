@@ -1,0 +1,2 @@
+Trial 25 finished with value: 0.15100161731243134 and parameters: {'mp_hidden_dim': 1058, 'ffn_hidden_dim': 1353, 'ffn_layers': 3, 'dropout_rate': 0.1, 'init_lr': 1e-05, 'max_lr': 0.003}.
+Trial 26 finished with value: 0.15104243159294128 and parameters: {'mp_hidden_dim': 704, 'ffn_hidden_dim': 778, 'ffn_layers': 2, 'dropout_rate': 0.1, 'init_lr': 1e-05, 'max_lr': 0.003}.

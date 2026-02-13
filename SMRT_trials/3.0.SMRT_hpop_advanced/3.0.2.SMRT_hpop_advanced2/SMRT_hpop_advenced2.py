@@ -1,25 +1,24 @@
 """
-3.0. SMRT_hpop_advanced
+3.0.2. SMRT_hpop_advanced2
 Author: Yixi Zhang
 Basic hyperparameters optimization is conducted using Optuna. These hyperparameters are optimized:
 1. mp_hidden_size: [300, 2400]
 2. ffn_hidden_size: [300, 2400]
 3. ffn_layers: [1,3]
-4. dropout_rate: [0.1, 0.5, step=0.1]
+4. dropout_rate: [0, 0.5, step=0.1]
 5. init_lr: [1e-5, 1e-4, step=1e-5]
 6. max_lr: [1e-4, 1e-2, step=1e-3]
 Warm_up_epochs used the default value: 2
+Comparing to 3.0.1.SMRT_hpop_advanced1 the interval for dropout rate is [0,0.5] and also I am letting it run for longer.
 The data used here is from METLIN SMRT (Domingo-Almenara et al., 2019).
 """
 # 0. Import modules
 
 import pandas as pd
-import numpy as np
 from chemprop import data, nn, models, featurizers
 from rdkit.Chem.inchi import MolFromInchi
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint
-import torch
 import optuna
 
 # 1. Load SMRT data
@@ -76,7 +75,7 @@ def objective (trial):
     mp_hidden_dim = trial.suggest_int("mp_hidden_dim", 300, 2400, log=True)
     ffn_hidden_dim = trial.suggest_int ("ffn_hidden_dim", 300, 2400, log=True)
     ffn_layers = trial.suggest_int ("ffn_layers", 1, 3)
-    dropout_rate = trial.suggest_float ("dropout_rate", 0.1, 0.5, step=0.1)
+    dropout_rate = trial.suggest_float ("dropout_rate", 0, 0.5, step=0.1)
     init_lr = trial.suggest_float ("init_lr",1e-5, 1e-4, step=1e-5)
     max_lr = trial.suggest_float ("max_lr", 1e-3, 1e-2, step=1e-3)
 
@@ -114,7 +113,7 @@ def objective (trial):
 # 6. Create Optuna study object
 
 study = optuna.create_study (direction = "minimize")
-study.optimize (objective, n_trials = 20)
+study.optimize (objective, n_trials = 40)
 
 #7. Get the results
 
@@ -123,7 +122,7 @@ clean_results = results.drop (columns = ["number","datetime_start", "datetime_co
 sorted_results = clean_results.sort_values(by = ["val_loss"]).reset_index (drop = True) #Sort the DataFrame by the val_loss
 sorted_results ["val_loss"] = round (sorted_results ["val_loss"], 4)
 #filename = "C:/Users/leonz/PyCharmMiscProject/TFG/SMRT_trials/Results_SMRT_hpop0.txt" #Windows Path name
-filename = "/home/user/YixiTFG/TFG_Yixi/SMRT_trials/3.SMRT_hpop_advanced/Results_hpop_advanced.txt"
+filename = "/home/user/YixiTFG/TFG_Yixi/SMRT_trials/3.0.SMRT_hpop_advanced/3.0.2.SMRT_hpop_advanced2/Results_hpop_advenced2.txt"
 with open(filename, "w") as f:
     f.write (sorted_results.to_string())
 
