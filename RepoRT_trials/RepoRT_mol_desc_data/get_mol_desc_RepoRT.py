@@ -39,3 +39,7 @@ inchi_array = df.loc [:,"inchi"].values
 
 mol_weight_array, xlop_array = get_mol_desc_from_inchi (inchi_array)
 
+df ["mol_weight"] = mol_weight_array
+df ["xlogp"] = xlop_array
+filename = "/home/user/YixiTFG/TFG_Yixi/RepoRT_trials/RepoRT_mol_desc_data/RepoRT_mol_desc.tsv"
+df.to_csv (filename, sep="\t", index=False)
