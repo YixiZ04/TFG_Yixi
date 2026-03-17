@@ -42,9 +42,9 @@ if __name__ == "__main__":
     else:
         print ("Getting the input datasets.")
         ms_split () # This automatically get the files to the input path.
-    train_df = pd.read_csv("./data/processed_RepoRT/ms_split_data/train_data.tsv", sep='\t').sample (400)
-    test_df = pd.read_csv("./data/processed_RepoRT/ms_split_data/test_data.tsv", sep='\t').sample (50)
-    val_df = pd.read_csv("./data/processed_RepoRT/ms_split_data/val_data.tsv", sep='\t').sample (50)
+    train_df = pd.read_csv("./data/processed_RepoRT/ms_split_data/train_data.tsv", sep='\t')
+    test_df = pd.read_csv("./data/processed_RepoRT/ms_split_data/test_data.tsv", sep='\t')
+    val_df = pd.read_csv("./data/processed_RepoRT/ms_split_data/val_data.tsv", sep='\t')
 
     print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)
