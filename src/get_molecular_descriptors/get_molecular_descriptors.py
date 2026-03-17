@@ -85,7 +85,7 @@ def add_columns2df (path2dataset, dataset, save_path = "./data/with_extra_mol_de
         position = temp_df.columns.get_loc ("rt_s")
         temp_df.insert (position + 1, "mono_iso_mass", temp_mass_serie)
         temp_df.insert (position + 2, "xlogp", temp_xlog_serie)
-        final_df = temp_df.dropna ()
+        final_df = temp_df.dropna (subset=["mono_iso_mass", "xlogp"])
         final_df = final_df.drop (columns = ["inchi"])
         final_df.to_csv (save_filename, sep = "\t", index = False)
     else:
