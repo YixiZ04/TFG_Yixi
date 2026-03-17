@@ -1,11 +1,9 @@
 """
-Name: random_spliting_functions,py
+Name: splitted_sets_functions,py
 Author: Yixi Zhang
 Date: March 2026
 Version: 1.0.
-Description: contains the functions needed for training a MPNN (chemprop) with random split RepoRT data and write the result files.
-To do so, run ./src/training/RepoRT/random_split/main.py
-
+Description: Contains functions for building a MPNN based on chemprop for RepoRT data. These functions are mainly for pre-treated datasets, this is, already scaled and splitted data.
 """
 #IMPORT MODULES
 import pandas as pd
@@ -19,6 +17,9 @@ import torch
 
 def get_dataloader (df, shuffle=True):
     """
+    Input: A dataframe, in this case, containing either train/val/test data pre-treated. shuffle is mainly for train_dataloader, if building test/val_loader, it should be set
+    to False.
+    Output: DataLoader built with the data introduced. The scaler used for the targets. And the dimension of gradient and metadata information.
     """
     inchis = df.loc [:, "inchi.std"].values
     rts = df.loc [:, ["rt_s"]].values
@@ -41,6 +42,13 @@ def get_dataloader (df, shuffle=True):
     return data_loader, targets_scaler, len (temp_column_list)
 
 def complete_cc_configure_train_model (scaler, train_loader, val_loader,param_dict, cc_shape, results_path, save_model=True):
+    """
+    Input: Scaler used for the targets. DataLoaders. Dictionary containing the parameters for training;
+    cc_shape: the length of the column metadata and gradient information.
+    results_path: the path where the results will be saved.
+    save_model: Boolean, set to True if want to save the .pt file.
+    Output: The trained model and the trainer per se, these would be used for prediction.
+    """
     mp = nn.BondMessagePassing(d_h=param_dict["mp_hidden_dim"])
     agg = nn.MeanAggregation()
     output_transform = nn.UnscaleTransform.from_standard_scaler(scaler)
@@ -85,6 +93,10 @@ def complete_cc_configure_train_model (scaler, train_loader, val_loader,param_di
     return mpnn, trainer
 
 def get_res_table (test_df, pred_array, save_dir):
+    """
+    Inputs: The dataframe containing test data. Array containing the predicted retention time. And the directory to save the result file.
+    Output: A dataframe containing the Results and it will be exported as a .tsv file to the output_dir.
+    """
     temp_df = test_df [["molecule_id", "inchi.std", "rt_s", "max_rt", "mean_rt"]]
     temp_df ["pred_rt"] = pred_array
     temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt_s"])
@@ -106,11 +118,19 @@ def metrics_from_dataframe (df):
     return mae, rmse, mean_rel_error_max_rt, mean_rel_error_mean_rt
 
 def write_metric_txt (mae, rmse, mean_rel_error_max_rt, mean_rel_error_mean_rt,results_path):
+    """
+    Input: All aggregated metrics (MAE, RMSE, Mean realtive errors.
+    Output: A .txt file containing the aggregated metrics written in the saving_dir.
+    """
     filename = results_path + "metrics.txt"
     with open (filename, "w") as f:
         f.write (f'MAE: {mae:.4f} s\nRMSE: {rmse:.4f} s.\nRelative error to max rt (%){mean_rel_error_max_rt:.4f}\nRelative error to mean rt (%){mean_rel_error_mean_rt:.4f}\n')
 
 def write_parameters_file(param_dict, results_path):
+    """
+    Input: The dictionary of parameters for this model.
+    Output: A .txt file containing the parameters for this model saved in the output_dir.
+    """
     filename = results_path + "parameters.txt"
     with open(filename, "w") as f:
         f.write(f'Parameters used for this model:\n')
