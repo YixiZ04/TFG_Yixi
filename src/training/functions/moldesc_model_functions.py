@@ -1,3 +1,10 @@
+"""
+Name: moldesc_model_functions.py
+Author: Yixi Zhang
+Date: March 2026
+Version: 1.11
+Description: Contains all the functions for training a chemprop model and get the results for SMRT with two extra molecular descriptors.
+"""
 import pandas as pd
 import numpy as np
 from chemprop import data, nn, models, featurizers
@@ -15,7 +22,7 @@ def get_dataloaders_with_moldesc (df, dataset = "SMRT"):
     IMPORTANT: This function does not introduce the chromatograpy conditions, but only monisotopic_mass and xlogp.
     """
     # These are common for both datasets
-    moniso_mws = df.loc[:, ["monoisotopic_mass"]].values
+    moniso_mws = df.loc[:, ["mono_iso_mass"]].values
     xlogps = df.loc[:, ["xlogp"]].values
     mol_descs = np.concatenate([moniso_mws, xlogps], axis = 1)
     if dataset == "SMRT":  # Mol objects from Inchi
@@ -117,13 +124,13 @@ def configure_and_train_mpnn_moldesc (target_scaler, mol_descs_scaler, train_loa
 
 # RESULTS
 
-def get_res_table_moldesc_SMRT (df, pred_array, test_indices):
+def get_res_table_moldesc (df, pred_array, test_indices):
     """
     Input: An array containing InChi, another containing target and last one containing the prediction (Test set)
     Output: A pandas dataframe with the prediction table.
     """
     inchi_array = df.loc [:,"inchi"].values
-    mol_weight_array = df.loc [:,"monoisotopic_mass"].values
+    mol_weight_array = df.loc [:,"mono_iso_mass"].values
     xlogp_array = df.loc [:,"xlogp"].values
     target_array = df.loc [:,"rt"].values
     inchis = []
@@ -152,47 +159,7 @@ def get_res_table_moldesc_SMRT (df, pred_array, test_indices):
                                 "diff": np.abs (pred_list - real_rt),})
     return res_table
 
-def get_res_table_RepoRT (df, test_indices, pred_array):
-    """
-    Inputs: A pandas dataframe containing the data used for training. An array (2D) containing the test indices. An array containing the results from prediction.
-    A filename (Absolute path + filename, e.g.). to save the .tsv file.
-    Output: A pandas dataframe containing the results and the differences (Not sorted) and a saved .tsv file in the indicated dir path.
-    """
-    id_array = df.loc [:,"molecule_id"].values
-    smiles = df.loc [:,"smiles.std"].values
-    real_rts = df.loc [:,"rt_s"].values
-    mol_weight_array = df.loc[:, "monoisotopic_mass"].values
-    xlogp_array = df.loc[:, "xlogp"].values
-    test_ids = []
-    test_smiles = []
-    test_rts = []
-    pred_res = []
-    mol_weights = []
-    xlogps = []
-    for index in test_indices [0]:
-        id = id_array[index]
-        smile = smiles[index]
-        real_rt = real_rts[index]
-        mol_weight = mol_weight_array[index]
-        xlogp = xlogp_array[index]
-        test_ids.append(id)
-        test_smiles.append(smile)
-        test_rts.append (real_rt)
-        mol_weights.append(mol_weight)
-        xlogps.append(xlogp)
-    for res in pred_array:
-        pred_res.append(round(res[0],2))
-    test_rts = np.array(test_rts)
-    pred_res = np.array(pred_res)
-    result_table = pd.DataFrame ({ "id": test_ids,
-                                    "smile": test_smiles,
-                                    "monoisotopic_mass": mol_weights,
-                                    "xlogp": xlogps,
-                                    "real_rt": test_rts,
-                                    "pred_rt": pred_res,
-                                    "diff": np.abs (test_rts - pred_res),
-    })
-    return result_table
+
 
 
 

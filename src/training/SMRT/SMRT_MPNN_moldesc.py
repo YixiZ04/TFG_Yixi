@@ -2,21 +2,29 @@
 Name: SMRT_MPNN_moldesc.py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.0
-Usage: Train MPNN with SMRT dataset with molecular descriptors (monoisotopic mass and xlogp). Change the param_dict and saving dir path to avoid result overwriting.
-NOTE: The input data must be ./data/with_extra_mol_desc/SMRT_extra_moldesc_data.tsv, make sure it exists.
+Version: 1.1.
+Usage: Train MPNN with SMRT dataset with molecular descriptors (mono_iso_mass and xlogp). Change the param_dict and saving dir path to avoid result overwriting.
+It builds 4 output files in the directory defined for output:
+    1. metrics.txt : A txt file containing the value og 2 metrics used for evaluating the model: MAE (s) and RMSE (s)
+    2. model.pt: A .pt for saving the pytorch model.
+    3. parameters.txt: A .txt file containing all parameters used for the training.
+    4. Result_table.tsv: A .tsv file containing the results: pred_rt, real_rt, difference...
+Update: Now if the input file does not exist, it will be built.
 """
 
 # IMPORT MODULES
 
 import os
 import sys
+from pathlib import Path
 from src.training.functions.basic_model_functions import write_metric_txt, metrics_from_dataframe, write_parameters_file
 from src.training.functions.moldesc_model_functions import *
+from src.get_molecular_descriptors.get_molecular_descriptors import add_columns2df
+
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
 
-csv_data_file = "./data/with_extra_mol_desc/SMRT_extra_moldesc_data.tsv"        # Be sure its existence.
+input_file = Path("./data/with_extra_mol_desc/SMRT_extra_mol_descs.tsv")        # Be sure its existence.
 path2res = "./logs/SMRT/moldesc/SMRT_moldesc_results_0/"                        # Change the dirname for each trial
 param_dict = {
     "mp_hidden_dim": 300,                                                       # Hidden dimension of the message passing (MP) part
@@ -38,13 +46,10 @@ param_dict = {
 
 if __name__ == "__main__":
     print(f"Check for the dataset given...")
-    try:
-        df = pd.read_csv(csv_data_file, sep="\t").sample (500)
-        # df = df.sample (500)        #Run this if want a quick test for usage
-    except FileNotFoundError:
-        print(f"Run file ./src/get_extra_mol_desc/SMRT_get_moldescs.py to get the moldesc file.")
-        sys.exit(1)
-
+    if not input_file.exists():
+        add_columns2df(path2dataset= "./data/no_extra_mol_desc/SMRT_data.csv", dataset="SMRT")
+    df = pd.read_csv(input_file, sep="\t")
+    # df = df.sample (500)        #Run this if want a quick test for usage
     print(f"Making the result directory...")
     os.makedirs(path2res, exist_ok=True)
 
@@ -58,7 +63,7 @@ if __name__ == "__main__":
 
     print("Making the result files...")
     write_parameters_file(param_dict, path2res)
-    res_table = get_res_table_moldesc_SMRT(df, test_pred, test_indices)
+    res_table = get_res_table_moldesc(df, test_pred, test_indices)
     res_table.to_csv(path2res + "Result_table.tsv", sep='\t', index=False)
     mae, rmse = metrics_from_dataframe(res_table)
     write_metric_txt(mae, rmse, path2res)

@@ -1,7 +1,7 @@
 # TFG_Yixi
 ## Version 1.0.
 MPNNs are build with chemprop to predict metabolites RT (retention time.)
-
+[src](src)
 Inside src/training/RepoRT/... are found many "main.py", just run those files, it will work. Only if it were the first time running, it will take several minutes building the input datafiles, but once built, it won't build them again, unless input pathes are changed. The raw data:
 ```
 https://github.com/michaelwitting/RepoRT
