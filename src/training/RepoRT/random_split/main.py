@@ -17,7 +17,7 @@ from src.training.RepoRT.random_split.perform_random_splitting import split_trai
 train_file = Path ("./data/processed_RepoRT/random_split_data/train_data.tsv")
 test_file = Path ("./data/processed_RepoRT/random_split_data/test_data.tsv")
 val_file = Path ("./data/processed_RepoRT/random_split_data/val_data.tsv")
-path2res = "./logs/RepoRT/random_split_res/Resultstry_1/"
+path2res = "./logs/RepoRT/random_split_res/Results_try_1/"
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -27,8 +27,8 @@ param_dict = {
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
-    "max_epochs": 40,                                 # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.1,                                # Dropout rate. 0 is default.
+    "max_epochs": 1000,                                 # Set to a smaller number as the datasets here are much smaller.
+    "dropout_rate": 0,                                # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
@@ -40,9 +40,9 @@ if __name__ == "__main__":
     else:
         print ("Getting the input datasets.")
         split_train_val_test() # This automatically get the files to the input path.
-    train_df = pd.read_csv("./data/processed_RepoRT/random_split_data/train_data.tsv", sep='\t')
-    test_df = pd.read_csv("./data/processed_RepoRT/random_split_data/test_data.tsv", sep='\t')
-    val_df = pd.read_csv("./data/processed_RepoRT/random_split_data/val_data.tsv", sep='\t')
+    train_df = pd.read_csv("./data/processed_RepoRT/cc_split_data/train_data.tsv", sep='\t')
+    test_df = pd.read_csv("./data/processed_RepoRT/cc_split_data/test_data.tsv", sep='\t')
+    val_df = pd.read_csv("./data/processed_RepoRT/cc_split_data/val_data.tsv", sep='\t')
 
     print ("Input data are successfully read. Making the output directory.")
     os.makedirs (path2res, exist_ok=True)

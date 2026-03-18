@@ -32,7 +32,7 @@ param_dict = {
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
-    "max_epochs": 40,                                 # Set to a smaller number as the datasets here are much smaller.
+    "max_epochs": 1000,                                 # Set to a smaller number as the datasets here are much smaller.
     "dropout_rate": 0,                                # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],

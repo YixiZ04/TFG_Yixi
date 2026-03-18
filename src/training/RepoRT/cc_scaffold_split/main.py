@@ -1,5 +1,5 @@
 """
-Name: training/RepoRT/cc_split/main.py
+Name: training/RepoRT/cc_scaffold_split/main.py
 Author: Yixi Zhang.
 Date: March 2026
 Version: 1.0.
@@ -7,29 +7,27 @@ Usage: Run the file to train and configure a MPNN using chemprop and processed d
 If the input datafiles do not exist, they will be built.
 """
 
-
-
 import os
 import sys
 from pathlib import Path
 from src.training.functions.splitted_sets_functions import *
-from src.training.RepoRT.cc_split.perform_cc_splitting import cc_split
+from src.training.RepoRT.cc_scaffold_split.perform_cc_scaffold_split import cc_ms_split
 # DEFINE PARAMETERS
 
-train_file = Path ("./data/processed_RepoRT/cc_split_data/train_data.tsv")
-test_file = Path ("./data/processed_RepoRT/cc_split_data/test_data.tsv")
-val_file = Path ("./data/processed_RepoRT/cc_split_data/val_data.tsv")
-path2res = "./logs/RepoRT/cc_split_res/Results_try_1/"
+train_file = Path ("./data/processed_RepoRT/cc_ms_split_data/train_data.tsv")
+test_file = Path ("./data/processed_RepoRT/cc_ms_split_data/test_data.tsv")
+val_file = Path ("./data/processed_RepoRT/cc_ms_split_data/val_data.tsv")
+path2res = "./logs/RepoRT/cc_ms_split_res/Results_try_filtered/"
 param_dict = {
-    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
+    "mp_hidden_dim": 480,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 1,                                  # Number of layers for the ffn.
+    "ffn_hidden_dim": 1024,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers": 5,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
-    "max_epochs": 40,                                 # Set to a smaller number as the datasets here are much smaller.
+    "max_epochs": 1000,                                 # Set to a smaller number as the datasets here are much smaller.
     "dropout_rate": 0.1,                                # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
@@ -41,10 +39,10 @@ if __name__ == "__main__":
         print ("The input files are correct!")
     else:
         print ("Getting the input datasets.")
-        cc_split() # This automatically get the files to the input path.
-    train_df = pd.read_csv("./data/processed_RepoRT/cc_split_data/train_data.tsv", sep='\t')
-    test_df = pd.read_csv("./data/processed_RepoRT/cc_split_data/test_data.tsv", sep='\t')
-    val_df = pd.read_csv("./data/processed_RepoRT/cc_split_data/val_data.tsv", sep='\t')
+        cc_ms_split() # This automatically get the files to the input path.
+    train_df = pd.read_csv("./data/processed_RepoRT/cc_ms_split_data/train_data.tsv", sep='\t')
+    test_df = pd.read_csv("./data/processed_RepoRT/cc_ms_split_data/test_data.tsv", sep='\t')
+    val_df = pd.read_csv("./data/processed_RepoRT/cc_ms_split_data/val_data.tsv", sep='\t')
 
     print ("Input data are successfully read. Making the output directory.")
     os.makedirs (path2res, exist_ok=True)
