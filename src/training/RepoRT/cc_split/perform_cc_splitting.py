@@ -2,39 +2,47 @@
 Name: perform_cc_splitting.py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.0.
+Version: 1.1.
 Description: Contains all the functions for performing CC (chromatography conditions) splitting.
-Note: The train set, val set and test set should be 80%, 10% and 10% of the original dataset, respectively (~=169899, 21237, 21237).
+Update: Implemented the new version of data_processing.py with the filtered datafile.
+And random seed shuffle has also been implemented as the datasets' size does not differ so much.
 """
 
 # IMPORT MODULES
 import pandas as pd
 import numpy as np
-from pathlib import Path
 import os
+from pathlib import Path
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 
-# DEFINE THE PATH TO INPUT DATA AND THE DIRECTORY TO SAVE THE RESULT FILES
-input_file = "./data/processed_RepoRT/complete_treated_data.tsv"
-output_dir = "./data/processed_RepoRT/cc_split_data/"
 
-def cc_split (input_path = input_file, output_dir = output_dir):
+#DEFINE VARIABLES
+# input_path = "./data/processed_RepoRT/complete_treated_data.tsv" #Uncomment this line if want to use the complete data.
+input_path = "./data/processed_RepoRT/filtered_treated_data.tsv"
+output_dir = "./data/processed_RepoRT/cc_split_data/"
+complete = False # Set to True if want to use the data without filtering
+
+# DEFINE THE FUNCTION
+def cc_split (input_path = input_path, output_dir = output_dir, complete=complete):
     print ("Checking the input file...")
     file = Path(input_path)
     if file.exists():
         print ("THe input file exists!")
     else:
         print ("The input file does not exist, creating it...")
-        get_processed_df_from_raw ()
+        get_processed_df_from_raw (complete=complete)
 
     print ("Getting the input DataFrame...")
     df = pd.read_csv (input_path, sep = "\t",)
 
     print ("Making the saving directory...")
     os.makedirs (output_dir, exist_ok = True)
+
+    #Main process
     dir_ids = np.unique (df["dir_id"])
-    # np.random.seed (21)
-    # np.random.shuffle (dir_ids)
+    if not complete:
+        np.random.seed (42)
+        np.random.shuffle (dir_ids)
     print ("Splitting into differente sets")
     train_ids = []
     val_ids = []
@@ -66,3 +74,7 @@ def cc_split (input_path = input_file, output_dir = output_dir):
 
 if __name__ == "__main__":
     cc_split ()
+    a = pd.read_csv (output_dir+"train_data.tsv", sep = "\t")
+    b = pd.read_csv (output_dir+"val_data.tsv", sep = "\t")
+    c = pd.read_csv (output_dir+"test_data.tsv", sep = "\t")
+    d = pd.read_csv (input_path, sep = "\t")
