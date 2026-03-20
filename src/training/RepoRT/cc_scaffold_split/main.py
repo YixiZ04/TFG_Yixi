@@ -5,6 +5,7 @@ Date: March 2026
 Version: 1.0.
 Usage: Run the file to train and configure a MPNN using chemprop and processed data randomly split from RepoRT.
 If the input datafiles do not exist, they will be built.
+Update: adapted to splitted_sets_functions.py version 1.1.
 """
 
 import os
@@ -40,17 +41,18 @@ if __name__ == "__main__":
     else:
         print ("Getting the input datasets.")
         cc_ms_split() # This automatically get the files to the input path.
-    train_df = pd.read_csv("./data/processed_RepoRT/cc_ms_split_data/train_data.tsv", sep='\t')
-    test_df = pd.read_csv("./data/processed_RepoRT/cc_ms_split_data/test_data.tsv", sep='\t')
-    val_df = pd.read_csv("./data/processed_RepoRT/cc_ms_split_data/val_data.tsv", sep='\t')
 
-    print ("Input data are successfully read. Making the output directory.")
+    train_df = pd.read_csv(train_file, sep='\t')
+    test_df = pd.read_csv(test_file, sep='\t')
+    val_df = pd.read_csv(val_file, sep='\t')
+
+    print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)
 
     print ("Getting the DatLoaders...")
-    val_loader, scaler,cc_shape = get_dataloader(val_df, shuffle=False)
-    test_loader, scaler, cc_shape = get_dataloader(test_df, shuffle=False)
-    train_loader, scaler, cc_shape = get_dataloader(train_df, shuffle=True)
+    train_loader, scaler, cc_shape = get_train_dataloader(train_df)
+    val_loader = get_test_val_loader(val_df, scaler)
+    test_loader = get_test_val_loader(test_df, scaler)
 
     print ("Building and training the model...")
     mpnn, trainer = complete_cc_configure_train_model(scaler, train_loader, val_loader, param_dict, cc_shape = cc_shape,results_path=path2res, save_model=True)
@@ -62,6 +64,7 @@ if __name__ == "__main__":
     res_table = get_res_table(test_df, test_pred, path2res)
     mae, rmse, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
     write_parameters_file(param_dict, path2res)
+    write_metrics_per_cc(res_table, path2res)
     write_metric_txt(mae, rmse, rel_max_error, rel_mean_error, path2res)
 
     print ("The resuls written successfully! Exiting the program...")
