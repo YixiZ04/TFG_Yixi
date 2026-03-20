@@ -20,10 +20,10 @@ test_file = Path ("./data/processed_RepoRT/cc_ms_split_data/test_data.tsv")
 val_file = Path ("./data/processed_RepoRT/cc_ms_split_data/val_data.tsv")
 path2res = "./logs/RepoRT/cc_ms_split_res/Results_try_filtered/"
 param_dict = {
-    "mp_hidden_dim": 480,                             # Hidden dimension of the message passing (MP) part
+    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 1024,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 5,                                  # Number of layers for the ffn.
+    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers": 1,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
