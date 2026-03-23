@@ -6,6 +6,7 @@ Version: 1.1.
 Usage: Run the file to train and configure a MPNN using chemprop and processed data scaffold split from RepoRT.
 If the input datafiles do not exist, they will be built.
 Update: adapted to splitted_sets_functions.py version 1.1.
+Update (1.2.): adapted to splitted_sets_functions.py version 1.2. (Input data scaling, aka metadatada and gradient data)
 """
 
 
@@ -17,10 +18,10 @@ from src.training.functions.splitted_sets_functions import *
 from src.training.RepoRT.scaffold_split.perform_scaffold_split import ms_split
 # DEFINE PARAMETERS
 
-train_file = Path ("./data/processed_RepoRT/ms_split_data/train_data.tsv")
-test_file = Path ("./data/processed_RepoRT/ms_split_data/test_data.tsv")
-val_file = Path ("./data/processed_RepoRT/ms_split_data/val_data.tsv")
-path2res = "./logs/RepoRT/ms_split_res/Results_try_filtered/"
+train_file = Path ("./data/processed_RepoRT/with_SMRT_ds/ms_split_data/train_data.tsv")
+test_file = Path ("./data/processed_RepoRT/with_SMRT_ds/ms_split_data/test_data.tsv")
+val_file = Path ("./data/processed_RepoRT/with_SMRT_ds/ms_split_data/val_data.tsv")
+path2res = "./logs/RepoRT/with_SMRT_ds/ms_split_res/Results_try_filtered/"
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -36,6 +37,7 @@ param_dict = {
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
+
 if __name__ == "__main__":
     if train_file.exists() and val_file.exists() and test_file.exists():
         print ("The input files are correct!")
@@ -48,6 +50,11 @@ if __name__ == "__main__":
 
     print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)
+
+    print ("Scaling the the metadata and gradient data using train Scaler...")
+    train_df, train_input_scaler = get_scaled_input_train_data(train_df)
+    val_df = get_scaled_datasets(val_df,train_input_scaler)
+    test_df = get_scaled_datasets(test_df,train_input_scaler)
 
     print ("Getting the DatLoaders...")
     train_loader, scaler, cc_shape = get_train_dataloader(train_df)

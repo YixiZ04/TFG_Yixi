@@ -15,14 +15,15 @@ import numpy as np
 import os
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-from src.training.RepoRT.scaffold_split.perform_scaffold_split import *
+from src.training.RepoRT.with_SMRT_ds.scaffold_split.perform_scaffold_split import *
 
 # DEFINE THE INPUT PATHS
 
-ms_train = Path("./data/processed_RepoRT/ms_split_data/train_data.tsv")
-ms_val = Path("./data/processed_RepoRT/ms_split_data/val_data.tsv")
-ms_test = Path("./data/processed_RepoRT/ms_split_data/test_data.tsv")
-def cc_ms_split (ms_train_file = ms_train, ms_val_file = ms_val, ms_test_file = ms_test, save_dir ="./data/processed_RepoRT/cc_ms_split_data/"):
+ms_train = Path("./data/processed_RepoRT/with_SMRT_ds/ms_split_data/train_data.tsv")
+ms_val = Path("./data/processed_RepoRT/with_SMRT_ds/ms_split_data/val_data.tsv")
+ms_test = Path("./data/processed_RepoRT/with_SMRT_ds/ms_split_data/test_data.tsv")
+output_dir = "./data/processed_RepoRT/with_SMRT_ds/cc_ms_split_data/"
+def cc_ms_split (ms_train_file = ms_train, ms_val_file = ms_val, ms_test_file = ms_test, save_dir =output_dir):
     # Check the input files.
     if not (ms_train_file.exists() and ms_val_file.exists() and ms_test_file.exists()):
         print ("Creating the Scaffold split files...")

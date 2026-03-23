@@ -2,25 +2,85 @@
 Name: splitted_sets_functions,py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.1.
+Version: 1.2.
 Description: contains the functions needed for training a MPNN (chemprop) with random split RepoRT data and write the result files.
 To do so, run ./src/training/RepoRT/random_split/main.py
-Update: A concept error was made in the previous version, as targets of each dataloader was scaled using a different Scaler. In this version, that has been fixed and a new function has been defined to
+Update (1.1.): A concept error was made in the previous version, as targets of each dataloader was scaled using a different Scaler. In this version, that has been fixed and a new function has been defined to
 get val/test_loader using the train_scaler of the train dataset.
 Updated metrics files, a new metric files will be created, it is a .tsv file containing the metrics (MAE, RMSE, %errors) for each repository contained in the test set.
 IMPORTANT: The %errors in the "metrics.txt" IS NOT THE MEAN VALUE OF THIS NEW FILE, they are calculate as mean of the metrics calculated from molecule to molecule.
+Update (1.2.): The functions to get the train scaler for the input (metadata and gradient data) and the scaled train set are defined here. The main difference in this new version
+is that the input files is no longer scaled but are scaled just before training.
+IMPORTANT: Here, the scaling data is not the whole dataset, but the metadata and gradient data for each repo are only considered 1 entree. In contrary, the input data
+(metadata and gradient data) would be conditioned to the molecule number from each cc, but if this were not the better way to do the scaling, it will be changed in future versions.
 """
 
 #IMPORT MODULES
 import numpy as np
 import pandas as pd
+
 from chemprop import data, nn, models, featurizers
 from rdkit.Chem.inchi import MolFromInchi
+from sklearn.preprocessing import StandardScaler
+
+import torch
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping
-import torch
 
 #DEFINE FUNCTIONS
+def get_scaled_input_train_data (train_df):
+    """
+    Input: The train set used for training a model.
+    Output: the scaled train set and the Scaler
+    """
+
+    temp_list = []
+    train_input_scaler = StandardScaler ()
+    index_array = np.unique (train_df["dir_id"])
+    for index in index_array: #This loop is used to get the condition from each cc (chromatography condition)
+        temp_df = train_df[train_df["dir_id"] == index]
+        row = temp_df.iloc[:1]
+        temp_list.append (row)
+    temp_df = pd.concat(temp_list)
+    input_data = temp_df.loc[:, "column.length":]
+    train_input_scaler.fit (input_data) #This would be returned as output.
+    position = train_df.columns.get_loc("column.length")
+    columns_used = train_df.columns [position:]
+    train_df [columns_used] = train_input_scaler.transform(train_df [columns_used])
+    return train_df, train_input_scaler
+
+def get_scaled_datasets (df, train_input_scaler):
+    """
+    Used for scaling the input df using the train Scaler.
+    In this context, this is used to get test and val data using train_input_scaler.
+    """
+    position = df.columns.get_loc("column.length")
+    columns_used = df.columns[position:]
+    df [columns_used] = train_input_scaler.transform(df[columns_used])
+    return df
+
+def scaling_meta_grad_data (updated_df):
+    """
+    Requieres a df that only contains 1 metadata and gradient data per repo.
+    Returns the same dataframe but scaled.
+    """
+    temp_df = updated_df.loc[:, "column.length":].astype(float)
+    std_scaler = StandardScaler()
+    scaled_array = std_scaler.fit_transform(temp_df)
+    for column, array in zip (temp_df.columns, scaled_array.transpose()):
+        temp_df[column] = array
+    temp_df.insert(0, "dir_id", updated_df["dir_id"])
+    return temp_df
+
+def get_complete_scaled_df (df, updated_df):
+    """
+    Use the previous unscaled dataframe and the scaled metadata and gradient dataframe.
+    And merges them together to get the complete scaled dataframe.
+    """
+    temp_df = df.loc[:, :"column.usp.code_nan"]
+    final_df = pd.merge (temp_df, updated_df, on = "dir_id", how = "inner")
+    return final_df
+
 
 def get_train_dataloader (train_df):
     """

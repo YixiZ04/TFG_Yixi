@@ -23,12 +23,10 @@ from sklearn.model_selection import train_test_split
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 #DEFINE VARIABLES
 
-# input_path = "./data/processed_RepoRT/complete_treated_data.tsv" #Uncomment this line if want to use the complete data.
-input_path = "./data/processed_RepoRT/filtered_treated_data.tsv"
-output_dir = "./data/processed_RepoRT/random_split_data/"
-complete = False # Set to True if want to use the data without filtering
+input_path = "./data/processed_RepoRT/with_SMRT_ds_data.tsv"
+output_dir = "./data/processed_RepoRT/with_SMRT_ds/random_split_data/"
 
-def split_train_val_test (input_path = input_path, output_dir =output_dir, complete=complete):
+def split_train_val_test (input_path = input_path, output_dir =output_dir):
     """
     Uses the scaled_complete_df to perform train_test_split.
     Random_state set to 42 for consistency.
@@ -38,7 +36,9 @@ def split_train_val_test (input_path = input_path, output_dir =output_dir, compl
         print ("The input file is correct!")
     else:
         print ("Getting the processed datafile...")
-        get_processed_df_from_raw(complete = complete)
+        get_processed_df_from_raw(drop_smrt=False,
+                                  apply_upthreshold=True,
+                                  complete=False)
     df = pd.read_csv(input_path, sep = "\t")
 
     print ("Checking the output dir...")

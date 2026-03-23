@@ -2,26 +2,32 @@
 Name: data_processing.py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.1.
+Version: 1.2.
 Usage: The processing method:
-        1. Keep only those columns used for training.
-        2. Drop those molecules having > 10 gradients.
-        3. Normalize values that need normalization, e.g., the column.length, column.ta, column.fr... using StandardScaler.
+    1. Keep only those columns used for training.
+    2. Drop those molecules having > 10 gradients.
+    3. Get max and mean RT for each repository, merge them to each molecule according the dir_id.
 Only functions are defined here, but if called the function "get_processed_df_from_raw", the processed datafile will be created and saved in:
 ./data/processed_RepoRT/complete_treated_data.tsv.
 (See ./src/get_RepoRT_data/RepoRT_get_all_data.py)
-Update: Filter and downsampling mechanism are included:
-    1. The repositories containing less than 100 molecules will be removed from the final dataset (100 is the default value, it can be changed).
-    2. Those repositories containing more than 5000 molecules will be random sampled of 5000 molecules (Downsampling).
-    If ran with all default values, a new datafile will be built in ./data/processed_data/ named "filterd_treated_data.tsv".
-    If ran with "complete" Boolean set to True, the original datafile will be saved in ./data/processed_data/ named "complete_treated_data.tsv".
+Update: Rectified a concept error here, as the final result table should not be scaled, and the scaling process will be done after data splitting using train set Scaler
+Also, on top of the previous update, here more options are given:
+    1. Drop completely the SMRT dataset and apply down_threshold. (Drop datasets if contains less molecules than the threshold).
+    2. Not dropping completely the SMRT and apply a up_threshold, meaning that we are performing a downsampling process.
+Overall, if all options were tested, this file could produce 6 different tsv files in ./data/processed_RepoRT/ and identified by their filename:
+    1. no_SMRT_complete_data.tsv (Dropped SMRT but no any filter has been applied, this is, it contains repos < 100 molecules)
+    2. no_SMRT_ds_data.tsv (Dropped SMRT and applied downsampling (ds), the repos contains 100 < n < 5000 molecules)
+    3. no_SMRT_no_ds_data.tsv (Dropped SMRT and applied ds, the repos contains n > 100 molecules.
+    4. with_SMRT_complete_data.tsv (Not dropped SMRT and repos contains any number of molecules).
+    5. with_SMRT_ds_data.tsv. This would be the "filtered_treated_data.tsv" in the previous version applying the filters.
+    6. with_SMRT_no_ds_data.tsv. Containing SMRT and no ds applied, but all repos contains n > 100 molecules.
+NOTE: This is possible to create all 6 files, but it does not mean that we will evaluate models on all of them.
 """
 # IMPORT MODULES AND SCRIPTS
 import pandas as pd
 import numpy as np
 import os
 from pathlib import Path
-from sklearn.preprocessing import StandardScaler
 from src.get_raw_data.RepoRT_get_all_data import get_raw_datatable
 
 # DEFINE  FUNCTIONS
@@ -61,43 +67,6 @@ def update_df_drop_grad (df, threshold):
     updated_df = new_temp_df.iloc[:, :position]
     return updated_df
 
-
-def get_updated_meta_grad_data (df):
-    """
-    This is used for getting updated gradient and column metadata from a treated dataframe.
-    Get the first row from each index existing in df.
-    """
-    temp_list = []
-    index_array = np.unique (df["dir_id"])
-    for index in index_array:
-        temp_df = df[df["dir_id"] == index]
-        row = temp_df.iloc[:1]
-        temp_list.append (row)
-
-    return pd.concat(temp_list)
-
-def scaling_meta_grad_data (updated_df):
-    """
-    Requieres a df that only contains 1 metadata and gradient data per repo.
-    Returns the same dataframe but scaled.
-    """
-    temp_df = updated_df.loc[:, "column.length":].astype(float)
-    std_scaler = StandardScaler()
-    scaled_array = std_scaler.fit_transform(temp_df)
-    for column, array in zip (temp_df.columns, scaled_array.transpose()):
-        temp_df[column] = array
-    temp_df.insert(0, "dir_id", updated_df["dir_id"])
-    return temp_df
-
-def get_complete_scaled_df (df, updated_df):
-    """
-    Use the previous unscaled dataframe and the scaled metadata and gradient dataframe.
-    And merges them together to get the complete scaled dataframe.
-    """
-    temp_df = df.loc[:, :"column.usp.code_nan"]
-    final_df = pd.merge (temp_df, updated_df, on = "dir_id", how = "inner")
-    return final_df
-
 def get_max_mean_rt_per_cc (complete_df):
     """
     This get the max and mean rt for every chromatography column and inserts them next to "rt_s" column of the dataframe.
@@ -118,28 +87,46 @@ def get_max_mean_rt_per_cc (complete_df):
     position = complete_df.columns.get_loc ("rt_s")
     complete_df.insert (position + 1, "max_rt", max_array)
     complete_df.insert (position + 2, "mean_rt", mean_array)
-    return complete_df
 
-def filter_by_n_mol (df, down_threshold = 100, up_threshold = 5000):
+def filter_by_n_mol (df, down_threshold = 100, up_threshold = 5000, apply_upthreshold = False):
     """
-    Input: A threshold for filetering RepoRT data. Those repositories containing less than threshold number of molecule will be removed.
-    If the cc has more molecules than up_thereshold, a downsampling will be applied to that repo and retains the up_threshold number of molecules.
-    Output: The updataed dataframe containing the filtered data.
+    Input: A threshold for filtering RepoRT data. Those repositories containing less than threshold number of molecule will be removed.
+    If the cc has more molecules than up_threshold, a downsampling will be applied to that repo and retains the up_threshold number of molecules.
+    apply_upthreshold (False): Boolean to decide whether to perform downsampling or not.
+    Output: The updated dataframe containing the filtered data.
     """
     index_array = np.unique (df["dir_id"])
     final_df = []
-    for index in index_array :
-        temp_df = df[df["dir_id"] == index]
-        if down_threshold < temp_df.shape[0] < up_threshold:
-            final_df.append (temp_df)
-        elif temp_df.shape[0] > up_threshold:
-            final_df.append (temp_df.sample (up_threshold))
-        else:
-            continue
+    if apply_upthreshold:
+        for index in index_array :
+            temp_df = df[df["dir_id"] == index]
+            if down_threshold < temp_df.shape[0] < up_threshold:
+                final_df.append (temp_df)
+            elif temp_df.shape[0] > up_threshold:
+                final_df.append (temp_df.sample (up_threshold))
+            else:
+                continue
+    else:
+        for index in index_array:
+            temp_df = df[df["dir_id"] == index]
+            if down_threshold < temp_df.shape[0]:
+                final_df.append(temp_df)
+            else:
+                continue
     return pd.concat (final_df)
 
 
-def get_processed_df_from_raw (complete = False, input_path = "./data/no_extra_mol_desc/RepoRT_complete_data.tsv", path2res = "./data/processed_RepoRT/",grad_num2drop = 11, down_threshold = 100, up_threshold = 5000):
+
+def get_processed_df_from_raw (input_path = "./data/no_extra_mol_desc/RepoRT_complete_data.tsv",
+                               path2res = "./data/processed_RepoRT/",
+                               grad_num2drop = 11,
+                               down_threshold = 100,
+                               up_threshold = 5000,
+                               complete = False,
+                               drop_smrt = True,
+                               apply_upthreshold = False,
+                               smrt_id = 186,
+                               ):
     """
     Input: complete (Boolean), default set to False to get the filtered data; if set to true, the complete data without filtering is fetched.
     input_path to RepoRT raw data.
@@ -149,7 +136,10 @@ def get_processed_df_from_raw (complete = False, input_path = "./data/no_extra_m
     Output: Depending on how "complete" Boolean is set, the result file will be different:
         *False: ./data/processed_RepoRT/filtered_treated_data.tsv
         *True: ./data/processed_RepoRT/complete_treated_data.tsv
-
+    Update: Takes 2 new Booleans and has 1 default parameter:
+        *drop_smrt (True): True if want to drop completely the SMRT dataset.
+        *apply_upthreshold (False): True if want to perform downsampling.
+        *smrt_id (186): This is the dir_id of SMRT, only change if RepoRT reorganized the directory IDs, which is not very likely
     """
     print (f"Checking for input file...")
     file = Path (input_path)
@@ -159,6 +149,12 @@ def get_processed_df_from_raw (complete = False, input_path = "./data/no_extra_m
         print (f"Input file not found, creating new file...")
         get_raw_datatable()
     df = pd.read_csv(input_path, sep = "\t")
+    if drop_smrt: #Not only decides if drop SMRT at all, but also initialize the filename for saving.
+        print ("Dropping SMRT data...")
+        filename = path2res + "no_SMRT_"
+        df = df[df["dir_id"] != smrt_id]
+    else:
+        filename = path2res + "with_SMRT_"
 
     print ("Checking for saving directory...")
     os.makedirs(path2res, exist_ok = True)
@@ -167,21 +163,23 @@ def get_processed_df_from_raw (complete = False, input_path = "./data/no_extra_m
     print ("Starting processing the data...")
     temp_df = keep_only_useful_columns(df)
     temp_df = update_df_drop_grad(temp_df, grad_num2drop)
-    updated_meta_grad_data = get_updated_meta_grad_data(temp_df)
-    scaled_meta_grad_data = scaling_meta_grad_data(updated_meta_grad_data)
-    final_complete_df = get_complete_scaled_df(temp_df, scaled_meta_grad_data)
-    final_complete_df = get_max_mean_rt_per_cc(final_complete_df)
-    if complete == True:
-        filename = path2res + "complete_treated_data.tsv"
+    get_max_mean_rt_per_cc(temp_df)
+    if complete:
+        filename = filename + "complete_data.tsv"
         print(f"The complete df is built and it will be saved in {filename}")
-        final_complete_df.to_csv (path2res+"complete_treated_data.tsv", sep = "\t")
+        temp_df.to_csv (filename, sep = '\t', index = False)
         print(f"Complete saving the precessed file in {filename} !!")
         return
     else:
-        final_filtered_df = filter_by_n_mol(final_complete_df, down_threshold = down_threshold, up_threshold = up_threshold)
-        filename = path2res + "filtered_treated_data.tsv"
+        final_filtered_df = filter_by_n_mol(temp_df, down_threshold = down_threshold, up_threshold = up_threshold, apply_upthreshold = apply_upthreshold)
+        if apply_upthreshold:
+            filename = filename + "ds_data.tsv" #Note: ds stands for "downsampling"
+        else:
+            filename = filename + "no_ds_data.tsv"
         print(f"The filtered df is built and it will be saved in {filename}")
         final_filtered_df.to_csv(filename, sep = '\t', index = False)
         print(f"Complete saving the precessed file in {filename} !!")
         return
 
+if __name__ == "__main__":
+    get_processed_df_from_raw()

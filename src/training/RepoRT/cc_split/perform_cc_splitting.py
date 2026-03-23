@@ -17,20 +17,20 @@ from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 
 
 #DEFINE VARIABLES
-# input_path = "./data/processed_RepoRT/complete_treated_data.tsv" #Uncomment this line if want to use the complete data.
-input_path = "./data/processed_RepoRT/filtered_treated_data.tsv"
-output_dir = "./data/processed_RepoRT/cc_split_data/"
-complete = False # Set to True if want to use the data without filtering
+input_path = "./data/processed_RepoRT/with_SMRT_ds_data.tsv"
+output_dir = "./data/processed_RepoRT/with_SMRT_ds/cc_split_data/"
 
 # DEFINE THE FUNCTION
-def cc_split (input_path = input_path, output_dir = output_dir, complete=complete):
+def cc_split (input_path = input_path, output_dir = output_dir):
     print ("Checking the input file...")
     file = Path(input_path)
     if file.exists():
         print ("THe input file exists!")
     else:
         print ("The input file does not exist, creating it...")
-        get_processed_df_from_raw (complete=complete)
+        get_processed_df_from_raw (drop_smrt=False,
+                                   apply_upthreshold=True,
+                                   complete=False)
 
     print ("Getting the input DataFrame...")
     df = pd.read_csv (input_path, sep = "\t",)
@@ -40,9 +40,8 @@ def cc_split (input_path = input_path, output_dir = output_dir, complete=complet
 
     #Main process
     dir_ids = np.unique (df["dir_id"])
-    if not complete:
-        np.random.seed (42)
-        np.random.shuffle (dir_ids)
+    np.random.seed (42)
+    np.random.shuffle (dir_ids)
     print ("Splitting into differente sets")
     train_ids = []
     val_ids = []
@@ -74,7 +73,3 @@ def cc_split (input_path = input_path, output_dir = output_dir, complete=complet
 
 if __name__ == "__main__":
     cc_split ()
-    a = pd.read_csv (output_dir+"train_data.tsv", sep = "\t")
-    b = pd.read_csv (output_dir+"val_data.tsv", sep = "\t")
-    c = pd.read_csv (output_dir+"test_data.tsv", sep = "\t")
-    d = pd.read_csv (input_path, sep = "\t")

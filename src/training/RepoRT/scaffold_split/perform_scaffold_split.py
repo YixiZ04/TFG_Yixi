@@ -18,20 +18,20 @@ from rdkit.Chem.Scaffolds import MurckoScaffold
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 
 #DEFINE VARIABLES
-# input_path = "./data/processed_RepoRT/complete_treated_data.tsv" #Uncomment this line if want to use the complete data.
-input_path = "./data/processed_RepoRT/filtered_treated_data.tsv"
-output_dir = "./data/processed_RepoRT/ms_split_data/"
-complete = False # Set to True if want to use the data without filtering
+input_path = "./data/processed_RepoRT/with_SMRT_ds_data.tsv"
+output_dir = "./data/processed_RepoRT/with_SMRT_ds/ms_split_data/"
 
 #DEFINE THE MAIN FUNCTION TO USE
-def ms_split (input_path=input_path, output_dir=output_dir, complete=complete):
+def ms_split (input_path=input_path, output_dir=output_dir):
     """
     Input: Path to processed DataFrame and Directory to save retult files.
     Outputs: Saves the train/val/test dsets in .tsv format inside the saving directory.
     """
     if not Path(input_path).exists():
         print ("The input file does not exist. Creating it...")
-        get_processed_df_from_raw (complete=complete)
+        get_processed_df_from_raw (drop_smrt=False,
+                                   apply_upthreshold=True,
+                                   complete=False)
 
     print ("Reading the input file...")
     df = pd.read_csv (input_path, sep='\t')
@@ -48,9 +48,8 @@ def ms_split (input_path=input_path, output_dir=output_dir, complete=complete):
 
     print (f"Getting train/val/test dsets and saving them in {output_dir}...")
     ms_smiles_classes = np.unique (final_df["ms_smiles"])
-    if not complete:
-        np.random.seed (42)
-        np.random.shuffle (ms_smiles_classes)
+    np.random.seed (42)
+    np.random.shuffle (ms_smiles_classes)
     train_dset, val_dset, test_dset = [], [], []
     train_size, val_size, test_size = 0, 0, 0
 
@@ -82,7 +81,3 @@ def ms_split (input_path=input_path, output_dir=output_dir, complete=complete):
 
 if __name__ == "__main__":
     ms_split ()
-    # a = pd.read_csv(output_dir + "train_data.tsv", sep="\t")
-    # b = pd.read_csv(output_dir + "val_data.tsv", sep="\t")
-    # c = pd.read_csv(output_dir + "test_data.tsv", sep="\t")
-    # d = pd.read_csv(input_path, sep="\t")

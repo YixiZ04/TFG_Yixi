@@ -2,15 +2,16 @@
 Name: RepoRT_get_all_data.py
 Author: Yixi Zhang
 Date: March 2026.
-Version: 1.0
+Version: 1.1.
 This will get the raw data from RepoRT and merge them into one single dataframe them export it to a tsv file.
 Some preprocessing to the data will be done:
-    1. All NA values would be filled with zero in the gradient data.
+    1. All NA values would be filled with zero in the gradient data, but the flowrate values.
     2. All the columns that have not gradient data included will be dropped.
     3. New column "id" will be added, this refers to the dataset's id, e.g., "0001, "0002", "0003"...
     4. The "formula" column will be updated with the real formula for the molecule usign RDkit.
     5. Add a column "rt_s" containing the retention time converted to seconds.
-This Script would need a version update, only if the format of RepoRT were changed, namely:
+    6. A pre-filter fot those repositories that gradient time data is not available.
+This Script would need a version update, only if the format of RepoRT were changed, namely: (I lied)
 the mol_data's url no longer being:https://raw.githubusercontent.com/michaelwitting/RepoRT/refs/heads/master/processed_data/{repo_index}/{repo_index}_rtdata_canonical_success.tsv
 the gradient_data's url no longer being: https://raw.githubusercontent.com/michaelwitting/RepoRT/refs/heads/master/processed_data/{repo_index}/{repo_index}_gradient.tsv
 or
@@ -19,8 +20,12 @@ or any format inside those files were changed,
 If any repo were add lately in RepoRT, only need to re-run the file changing the variable "num_repos".
 
 NOTE: Internet connexion is required and takes several minutes to build thw datafile from scratch
-"""
 
+Update: In the previous version, the doublets was not considered, meaning that if the isomeric SMILES exists for a repo, the canonical and the isomeric SMILES were both included in the dataset;
+so now in this new version, this is fixed by overwriting the canonical SMILES with the isomeric SMILES if possible.
+Also, the flowrate data has also been better treated, as in the previous version, the nan values in flow_rate data was not considered, so in the final datafile it is 0 in those repositories
+where flowrate = nan; in this version, this has been fixed by filling them with mean flowrate values.
+"""
 # Import modules
 
 import numpy as np
@@ -85,7 +90,8 @@ def get_mol_formula_by_smiles (smiles):
 def get_rt_data (num_repos=num_repos,seed_url=seed_url):
     """
     Input: num_repos to fetch, and the seed url for RepoRT.
-    Output: a table containing the RT data fetched from RepoRT
+    Output: a table containing the RT data fetched from RepoRT.
+    Update: fixed the concept error, as now the isomeric success will only be used for updating the cononical success data table.
     """
     final_dataframe = pd.DataFrame()
     index_array = get_index_array(num_repos)
@@ -96,13 +102,13 @@ def get_rt_data (num_repos=num_repos,seed_url=seed_url):
         try:
             temp_dataframe_can = pd.read_csv(can_url, sep="\t", encoding="utf-8")
             temp_dataframe_iso = pd.read_csv(iso_url, sep="\t", encoding = "utf-8")
-            if temp_dataframe_can.shape [0] != 0 and temp_dataframe_iso.shape [0] != 0:
-                final_dataframe = pd.concat ([final_dataframe, temp_dataframe_can, temp_dataframe_iso], ignore_index=True)
-            elif temp_dataframe_iso.shape [0] == 0 and temp_dataframe_can.shape [0] != 0:
-                final_dataframe = pd.concat ([final_dataframe, temp_dataframe_can], ignore_index=True)
-            else:
-                print (f"The repo {index} does not contain any data. It will be skipped.")
-        except:
+            # Use the id of the molecule as index followed by the updating.
+            temp_dataframe_can = temp_dataframe_can.set_index ("id")
+            temp_dataframe_iso = temp_dataframe_iso.set_index ("id")
+            temp_dataframe_can.update(temp_dataframe_iso) #Here, if isomiric success is not emply
+            temp_dataframe_can = temp_dataframe_can.reset_index ()
+            final_dataframe = pd.concat ([final_dataframe, temp_dataframe_can], ignore_index=True)
+        except: #The only error here is that the URL has not been found
             print (f"The repo nº {index} has not been found in the dataset. It will be skipped...")
     dir_id_array = [idmol.split("_")[0] for idmol in final_dataframe["id"]]
     dir_id_array = np.array(dir_id_array)
@@ -323,6 +329,30 @@ def get_gradient_data (num_repos = num_repos, seed_url = seed_url):
     del temp_df, temp_df_row_final, temp_df_row
     return final_df
 
+def update_flow_rate (df, max_grad_num = 18):
+    """
+    This function updates all flowrate in the gradient data. There are nan values in flowrates and in the fetching process, they were filled with 0.
+    So here, we update those values of 0 with the flowrate inferred using the mean flowrate of all the repositories.
+    This updating process is only applied to the segments of gradient where it exists (time of the segment !=0), meaning for example, if in a repo only 7 segments,
+    all the other segments from 8 to final will not be filled with flowrate.
+    """
+    updated_df = []
+    index_array = np.unique(df["dir_id"])
+    for index in index_array:
+        print (index)
+        temp_df = df[df["dir_id"] == index].reset_index(drop = True)
+        fr_array = temp_df.loc [:,"column.flowrate"].values
+        for grad_index in range(max_grad_num):
+            time_column_name = "t [min]_" + str(grad_index)
+            fr_column_name = "flow rate [ml/min]_" + str(grad_index)
+            time = temp_df.loc[0, time_column_name]
+            if time != 0 and grad_index > 0:
+                temp_df [fr_column_name] = fr_array
+            else:
+                continue
+        updated_df.append (temp_df)
+    return pd.concat (updated_df, ignore_index = True)
+
 def get_raw_datatable(save_dir = save_dir):
     """
     This function makes the raw datatable from RepoRT with all data processed and saves it in the save_dir.
@@ -360,6 +390,7 @@ def get_raw_datatable(save_dir = save_dir):
     print (f"Building the raw datatable and saving it in {save_file}...")
     temp_final_datatable = pd.merge (temp_column_metadata, temp_grad_data, on = "dir_id", how = "inner")
     final_datatable = pd.merge (temp_rt_data, temp_final_datatable, on = "dir_id", how = "inner")
+    final_datatable = update_flow_rate (final_datatable)
 
     # Export the final datatable
     final_datatable.to_csv (save_file, sep = "\t", index = False)
@@ -370,7 +401,6 @@ def get_raw_datatable(save_dir = save_dir):
 #Get raw datatable
 if __name__ == "__main__":
     get_raw_datatable()
-    sys.exit (0)
 
 
 
