@@ -27,16 +27,16 @@ from src.training.RepoRT.cc_split.perform_cc_splitting import cc_split
 dataset_type = "no_SMRT" #Or with_SMRT, depends on the type of input dataset to use.
 path2res = os.path.join(".", "logs","RepoRT", dataset_type, "cc_split", "dirname/") #Change "dirname" for any name you want.
 param_dict = {
-    "mp_hidden_dim": 480,                             # Hidden dimension of the message passing (MP) part
+    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 1024,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 5,                                  # Number of layers for the ffn.
+    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers": 1,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
-    "max_epochs": 1000,                                 # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.1,                                # Dropout rate. 0 is default.
+    "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
+    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
