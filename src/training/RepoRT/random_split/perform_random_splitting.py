@@ -2,7 +2,7 @@
 Name: perform_random_splitting.py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.1.
+Version: 1.2.
 Usage: Separate the df in three sets: training, validation and testing totally random:
         1. The train set contains 80% of molecules from each repository||chromatography condition.
         2. The val set contains 10% of molecules form each repository||chromatography condition.
@@ -11,7 +11,8 @@ A random seed (42) is set, so the random splitting should be reproducible unless
 The function defined here will create the random split input datafile in: ./data/processed_data/random_split_data/
 If the processed datafile does not exist, it will be created from the raw datafile. In the same way, if the raw datafile does not exist, it will be created.
 (See ./src/process_RepoRT_data/data_processing.py)
-Update: Implemented the new version of data_processing.py with the filtered datafile.
+Update (1.1.): Implemented the new version of data_processing.py with the filtered datafile.
+Update (1.2.): Adapted to the version 1.2. of data_processing.py, as now this splitting function is more flexible.
 """
 
 # IMPORT MODULES
@@ -21,12 +22,8 @@ import os
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
-#DEFINE VARIABLES
 
-input_path = "./data/processed_RepoRT/with_SMRT_ds_data.tsv"
-output_dir = "./data/processed_RepoRT/with_SMRT_ds/random_split_data/"
-
-def split_train_val_test (input_path = input_path, output_dir =output_dir):
+def split_train_val_test (input_path, output_dir, drop_smrt, apply_upthreshold):
     """
     Uses the scaled_complete_df to perform train_test_split.
     Random_state set to 42 for consistency.
@@ -36,8 +33,8 @@ def split_train_val_test (input_path = input_path, output_dir =output_dir):
         print ("The input file is correct!")
     else:
         print ("Getting the processed datafile...")
-        get_processed_df_from_raw(drop_smrt=False,
-                                  apply_upthreshold=True,
+        get_processed_df_from_raw(drop_smrt=drop_smrt,
+                                  apply_upthreshold=apply_upthreshold,
                                   complete=False)
     df = pd.read_csv(input_path, sep = "\t")
 
@@ -73,3 +70,9 @@ def split_train_val_test (input_path = input_path, output_dir =output_dir):
 
 if __name__ == "__main__":
     split_train_val_test()
+    train_file = output_dir + "train_data.tsv"
+    val_file = output_dir + "val_data.tsv"
+    test_file = output_dir + "test_data.tsv"
+    a = pd.read_csv (train_file, sep = "\t")
+    b = pd.read_csv (val_file, sep = "\t")
+    c = pd.read_csv (test_file, sep = "\t")

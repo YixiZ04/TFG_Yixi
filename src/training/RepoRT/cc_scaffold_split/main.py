@@ -2,29 +2,35 @@
 Name: training/RepoRT/cc_scaffold_split/main.py
 Author: Yixi Zhang.
 Date: March 2026
-Version: 1.0.
+Version: 1.3.
 Usage: Run the file to train and configure a MPNN using chemprop and processed data randomly split from RepoRT.
 If the input datafiles do not exist, they will be built.
-Update: adapted to splitted_sets_functions.py version 1.1.
+Update (1.1.): adapted to splitted_sets_functions.py version 1.1.
 Update (1.2.): adapted to splitted_sets_functions.py version 1.2. (Input data scaling, aka metadatada and gradient data)
+Update (1.3.): added an option to evaluate different datasets, for now, two types in total:
+    1. All RepoRT data with SMRT removed. (no_SMRT)
+    2. All RepoRT but downsampled those Repositories with >5000 molecuels (with_SMRT).
+    If in the future, more datasets shuold be evaluated, this Script is easily extendable.
+    (This could also be considered as adapting the version 1.2. of data_processing.py)
+NOTE: Change dirname in line 28 to customize the saving directory name.
 """
 
+#IMPORT MODULES
 import os
 import sys
 from pathlib import Path
 from src.training.functions.splitted_sets_functions import *
 from src.training.RepoRT.cc_scaffold_split.perform_cc_scaffold_split import cc_ms_split
+
 # DEFINE PARAMETERS
 
-train_file = Path ("./data/processed_RepoRT/with_SMRT_ds/cc_ms_split_data/train_data.tsv")
-test_file = Path ("./data/processed_RepoRT/with_SMRT_ds/cc_ms_split_data/test_data.tsv")
-val_file = Path ("./data/processed_RepoRT/with_SMRT_ds/cc_ms_split_data/val_data.tsv")
-path2res = "./logs/RepoRT/with_SMRT_ds/cc_ms_split_res/Results_new_scaler/"
+dataset_type = "with_SMRT" #Or with_SMRT, depends on the type of input dataset to use.
+path2res = os.path.join(".", "logs","RepoRT", dataset_type, "cc_scaffold_split", "dirname/") #Change "dirname" for any name you want.
 param_dict = {
-    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
+    "mp_hidden_dim": 480,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 1,                                  # Number of layers for the ffn.
+    "ffn_hidden_dim": 1024,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers": 5,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
@@ -37,12 +43,44 @@ param_dict = {
 }
 
 if __name__ == "__main__":
+    # Assertion for the data type. Match is used here for better generalization if in the future more dataset types will be evaluated.
+    match dataset_type:
+        case "no_SMRT":  # These following Booleans are used to get the processed dataset if has not been created yet.
+            drop_smrt = True
+            apply_upthreshold = False
+            processed_filename = "no_SMRT_no_ds_data.tsv"  # filename for the processed .tsv file.
+            random_seed = 51
+        case "with_SMRT":
+            drop_smrt = False
+            apply_upthreshold = True
+            processed_filename = "with_SMRT_ds_data.tsv"
+            random_seed = 51
+        case _:
+            raise NameError(f"Check the dataset_type: {dataset_type}.")
+
+    # Define the processed file according to the dataset type given.
+    input_file = os.path.join (".", "data", "processed_RepoRT", processed_filename)
+    ms_complete_save_dir = os.path.join (".", "data", "processed_RepoRT", dataset_type, "scaffold_split_data/")
+    ms_complete_file = os.path.join (ms_complete_save_dir,"ms_complete_data.tsv")
+    split_path = os.path.join (".", "data", "processed_RepoRT", dataset_type, "cc_scaffold_split_data/")
+    train_file = Path (split_path + "train_data.tsv")
+    test_file = Path (split_path + "test_data.tsv")
+    val_file = Path (split_path + "val_data.tsv")
+
+    # This conditions checks for the splitting files to exist. If NOT existing, they will be created.
     if train_file.exists() and val_file.exists() and test_file.exists():
         print ("The input files are correct!")
     else:
-        print ("Getting the input datasets.")
-        cc_ms_split() # This automatically get the files to the input path.
+        print ("Getting the random_splitted files...")
+        cc_ms_split (ms_complete_file= ms_complete_file, #Depending on the dataset that we want to evaluate, this function automatically creates the files needed.
+                     save_dir=split_path,
+                     random_seed=random_seed,
+                     processed_file=input_file,
+                     save_complete_ms_dir=ms_complete_save_dir,
+                     drop_smrt=drop_smrt,
+                     apply_upthreshold=apply_upthreshold)
 
+    print ("Reading the input files...")
     train_df = pd.read_csv(train_file, sep='\t')
     test_df = pd.read_csv(test_file, sep='\t')
     val_df = pd.read_csv(val_file, sep='\t')
@@ -50,12 +88,12 @@ if __name__ == "__main__":
     print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)
 
-    print ("Scaling the the metadata and gradient data using train Scaler...")
+    print("Scaling the the metadata and gradient data using train Scaler...")
     train_df, train_input_scaler = get_scaled_input_train_data(train_df)
-    val_df = get_scaled_datasets(val_df,train_input_scaler)
-    test_df = get_scaled_datasets(test_df,train_input_scaler)
+    val_df = get_scaled_datasets(val_df, train_input_scaler)
+    test_df = get_scaled_datasets(test_df, train_input_scaler)
 
-    print ("Getting the DatLoaders...")
+    print ("Getting the DataLoaders...")
     train_loader, scaler, cc_shape = get_train_dataloader(train_df)
     val_loader = get_test_val_loader(val_df, scaler)
     test_loader = get_test_val_loader(test_df, scaler)
@@ -74,4 +112,3 @@ if __name__ == "__main__":
     write_metric_txt(mae, rmse, rel_max_error, rel_mean_error, path2res)
 
     print ("The resuls written successfully! Exiting the program...")
-    sys.exit(0)

@@ -2,11 +2,10 @@
 Name: perform_scaffold_split.py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.1.
+Version: 1.2.
 Description: Based on RDkit and Bemis-Murcko Scaffold to avoid data leakage, this is, to make sure each dataset (train/test/val) has different scaffolds.
-Update: Implemented the new version of data_processing.py with the filtered datafile.
-And also random shuffle with random seed is implemented, as the datasets' size does nor differ so much.
-
+Update (1.1.): Implemented the new version of data_processing.py with the filtered datafile.
+Update (1.2.): Adapted to the version 1.2. of data_processing.py, as now this splitting function is more flexible.
 """
 
 #IMPORT MODULES
@@ -17,20 +16,15 @@ import numpy as np
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 
-#DEFINE VARIABLES
-input_path = "./data/processed_RepoRT/with_SMRT_ds_data.tsv"
-output_dir = "./data/processed_RepoRT/with_SMRT_ds/ms_split_data/"
-
-#DEFINE THE MAIN FUNCTION TO USE
-def ms_split (input_path=input_path, output_dir=output_dir):
+def ms_split (input_path, output_dir, drop_smrt, apply_upthreshold):
     """
-    Input: Path to processed DataFrame and Directory to save retult files.
+    Input: Path to processed DataFrame and Directory to save result files.
     Outputs: Saves the train/val/test dsets in .tsv format inside the saving directory.
     """
     if not Path(input_path).exists():
         print ("The input file does not exist. Creating it...")
-        get_processed_df_from_raw (drop_smrt=False,
-                                   apply_upthreshold=True,
+        get_processed_df_from_raw (drop_smrt=drop_smrt,
+                                   apply_upthreshold=apply_upthreshold,
                                    complete=False)
 
     print ("Reading the input file...")
@@ -70,14 +64,15 @@ def ms_split (input_path=input_path, output_dir=output_dir):
     train_dset = pd.concat (train_dset, ignore_index = True)
     val_dset = pd.concat (val_dset, ignore_index = True)
     test_dset = pd.concat (test_dset, ignore_index = True)
+    complete_dset = pd.concat ([train_dset, val_dset, test_dset], ignore_index = True)
 
     #Export those dataframes to a .tsv file in the output_dir
     train_file = output_dir + "train_data.tsv"
     val_file = output_dir + "val_data.tsv"
     test_file = output_dir + "test_data.tsv"
+    complete_file = output_dir + "ms_complete_data.tsv"
     train_dset.to_csv (train_file, sep = "\t", index = False)
     val_dset.to_csv (val_file, sep = "\t", index = False)
     test_dset.to_csv (test_file, sep = "\t", index = False)
+    complete_dset.to_csv (complete_file, sep = "\t", index = False)
 
-if __name__ == "__main__":
-    ms_split ()

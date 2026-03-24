@@ -2,10 +2,11 @@
 Name: perform_cc_splitting.py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.1.
+Version: 1.2.
 Description: Contains all the functions for performing CC (chromatography conditions) splitting.
-Update: Implemented the new version of data_processing.py with the filtered datafile.
+Update (1.1.): Implemented the new version of data_processing.py with the filtered datafile.
 And random seed shuffle has also been implemented as the datasets' size does not differ so much.
+Update (1.2.): Adapted to the version 1.2. of data_processing.py, as now this splitting function is more flexible.
 """
 
 # IMPORT MODULES
@@ -15,21 +16,21 @@ import os
 from pathlib import Path
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 
-
-#DEFINE VARIABLES
-input_path = "./data/processed_RepoRT/with_SMRT_ds_data.tsv"
-output_dir = "./data/processed_RepoRT/with_SMRT_ds/cc_split_data/"
-
 # DEFINE THE FUNCTION
-def cc_split (input_path = input_path, output_dir = output_dir):
+def cc_split (input_path, output_dir, drop_smrt, apply_upthreshold):
+    """
+    Splitting the processed datafile (input_path) given by chromatography conditions.
+    The train, test and val tsv files will be saved in the output_dir
+    If the processed RepoRT input file does not exist, it will be created using drop_smrt (Boolean) and apply_upthreshold (Boolean).
+    """
     print ("Checking the input file...")
     file = Path(input_path)
     if file.exists():
         print ("THe input file exists!")
     else:
         print ("The input file does not exist, creating it...")
-        get_processed_df_from_raw (drop_smrt=False,
-                                   apply_upthreshold=True,
+        get_processed_df_from_raw (drop_smrt=drop_smrt,
+                                   apply_upthreshold=apply_upthreshold,
                                    complete=False)
 
     print ("Getting the input DataFrame...")
@@ -43,12 +44,8 @@ def cc_split (input_path = input_path, output_dir = output_dir):
     np.random.seed (42)
     np.random.shuffle (dir_ids)
     print ("Splitting into differente sets")
-    train_ids = []
-    val_ids = []
-    test_ids = []
-    train_size = 0
-    test_size = 0
-    val_size = 0
+    train_ids, val_ids, test_ids = [], [], []
+    train_size = test_size = val_size = 0
     for dir_id in dir_ids:
         temp_df = df[df["dir_id"] == dir_id]
         if train_size + temp_df.shape [0]< 0.8*df.shape[0]:
@@ -71,5 +68,3 @@ def cc_split (input_path = input_path, output_dir = output_dir):
     val_dset.to_csv (val_file, sep = "\t", index = False)
     test_dset.to_csv (test_file, sep = "\t", index = False)
 
-if __name__ == "__main__":
-    cc_split ()
