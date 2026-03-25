@@ -63,9 +63,9 @@ if __name__ == "__main__":
     df = pd.read_csv(csv_data_file, sep=";")
     if only_retained:
         df = df[df["rt"] > 300]       #Run this line if only retained mole
-        path2res = os.path.join (".", "logs", "SMRT", "only_retained", save_dir_name)
+        path2res = os.path.join (".", "logs", "hpopting","SMRT", "only_retained", save_dir_name)
     else:
-        path2res = os.path.join (".", "logs", "SMRT", "all_molecules", save_dir_name)
+        path2res = os.path.join (".", "logs","hpopting",  "SMRT", "all_molecules", save_dir_name)
     # df = df.sample(500)  # Run this if want a quick test for usage
     inchi_array = df.loc[:, "inchi"].values
     rts = df.loc[:, ["rt"]].values
