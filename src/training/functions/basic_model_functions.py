@@ -226,27 +226,6 @@ def write_parameters_file (param_dict, results_path):
             f.write (f"{key}: {value}\n")
 
 
-# HYPERPARAMETER OPTIMIZATION FUNCTIONS
-def write_hpop_params (search_space, path2res):
-    """
-    Write a txt file in the directory for saving results with the searching space defined in the file.
-    """
-    filename = path2res + "parameters.txt"
-    with open(filename, "w") as f:
-        f.write ("The search space in this optimization run is:\n")
-        for key, value in search_space.items():
-            f.write (f"{key}: {value}\n")
-def get_results_table_from_study (study, path2res):
-    """
-    Export an .tsv file with all the results got from a hyperparameter optimization run to the result saving directory.
-    """
-    filename = path2res + "Results_table.tsv"
-    results = study.trials_dataframe()
-    clean_results = results.drop (columns = ["number","datetime_start", "datetime_complete", "state"]).rename (columns = {"value":"val_loss"}) #Drop not interesting columns.
-    sorted_results = clean_results.sort_values(by = ["val_loss"]).reset_index (drop = True) #Sort the DataFrame by the val_loss
-    sorted_results.to_csv (filename, sep='\t', index = False)
-    print (f"Successfully written the Result table and saved as {filename}")
-
 
 
 
