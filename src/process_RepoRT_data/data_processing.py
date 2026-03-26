@@ -28,7 +28,7 @@ import pandas as pd
 import numpy as np
 import os
 from pathlib import Path
-from src.get_raw_data.RepoRT_get_all_data import get_raw_datatable
+from src.get_raw_data.RepoRT_get_all_data import get_raw_datatable, save_dir as raw_save_dir
 
 # DEFINE  FUNCTIONS
 def keep_only_useful_columns (df):
@@ -143,12 +143,15 @@ def get_processed_df_from_raw (input_path = "./data/no_extra_mol_desc/RepoRT_com
     """
     print (f"Checking for input file...")
     file = Path (input_path)
+    source_path = input_path
     if file.exists():
         print (f"Input file read successfully!")
     else:
         print (f"Input file not found, creating new file...")
         get_raw_datatable()
-    df = pd.read_csv(input_path, sep = "\t")
+        source_path = os.path.join(raw_save_dir, "RepoRT_complete_data.tsv")
+        print (f"Reading regenerated raw data from default path: {source_path}")
+    df = pd.read_csv(source_path, sep = "\t")
     if drop_smrt: #Not only decides if drop SMRT at all, but also initialize the filename for saving.
         print ("Dropping SMRT data...")
         filename = path2res + "no_SMRT_"
