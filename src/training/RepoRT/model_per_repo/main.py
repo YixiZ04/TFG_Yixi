@@ -60,7 +60,7 @@ if __name__ == "__main__":
     relmax_array = []
     relmean_array = []
     id_array = []
-    for id in range (1, num_repos):
+    for id in range (1, num_repos + 1):
         temp_df = df[df["dir_id"] == id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
         if temp_df.shape [0] != 0:              # This double checks for empty dfs, might be redundant.
             # temp_df = temp_df.sample (50)     #Run this to have a quick test of the Script's usage
@@ -97,7 +97,6 @@ if __name__ == "__main__":
     write_metric_tsv(id_array, mae_array, rmse_array, relmax_array, relmean_array, path2res)
     print ("All files successfully written !")
     sys.exit(0)
-
 
 
 
