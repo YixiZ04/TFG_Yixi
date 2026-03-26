@@ -77,7 +77,10 @@ def configure_and_train_mpnn_moldesc (target_scaler, mol_descs_scaler, train_loa
     """
     # Build the model with the mol_desc_scaler
 
-    mp = nn.BondMessagePassing (d_h = param_dict["mp_hidden_dim"])
+    mp = nn.BondMessagePassing(
+        d_h=param_dict["mp_hidden_dim"],
+        depth=param_dict["mp_depth"],
+    )
     agg = nn.MeanAggregation ()
     output_transform = nn.UnscaleTransform.from_standard_scaler(target_scaler)
     X_d_transform = nn.ScaleTransform.from_standard_scaler(mol_descs_scaler)        #This is the different part.
@@ -158,7 +161,6 @@ def get_res_table_moldesc (df, pred_array, test_indices):
                                 "pred_rt": pred_list,
                                 "diff": np.abs (pred_list - real_rt),})
     return res_table
-
 
 
 

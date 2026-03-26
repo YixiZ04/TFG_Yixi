@@ -67,7 +67,10 @@ def configure_and_train_mpnn (scaler, train_loader, val_loader, param_dict, resu
     """
     Used for configure and train a chemprop model using Trainer from lightning.pytorch
     """
-    mp = nn.BondMessagePassing (d_h = param_dict["mp_hidden_dim"])
+    mp = nn.BondMessagePassing(
+        d_h=param_dict["mp_hidden_dim"],
+        depth=param_dict["mp_depth"],
+    )
     agg = nn.MeanAggregation ()
     output_transform = nn.UnscaleTransform.from_standard_scaler(scaler)
     ffn = nn.RegressionFFN (output_transform = output_transform,
@@ -224,7 +227,6 @@ def write_parameters_file (param_dict, results_path):
         f.write (f'Parameters used for this model:\n')
         for key,value in param_dict.items():
             f.write (f"{key}: {value}\n")
-
 
 
 
