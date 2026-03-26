@@ -19,6 +19,7 @@ NOTE: Change dirname in line 28 to customize the saving directory name.
 import os
 import sys
 from pathlib import Path
+from lightning import pytorch as pl
 from src.training.functions.splitted_sets_functions import *
 from src.training.RepoRT.random_split.perform_random_splitting import split_train_val_test
 
@@ -44,6 +45,7 @@ param_dict = {
 
 
 if __name__ == "__main__":
+    pl.seed_everything(42, workers=True)
     # Assertion for the data type. Match is used here for better generalization if in the future more dataset types will be evaluated.
     match dataset_type:
         case "no_SMRT":     #These following Booleans are used to get the processed dataset if has not been created yet.

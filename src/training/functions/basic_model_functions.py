@@ -37,7 +37,12 @@ def get_dataloaders (feature_array, target_array, dataset = "SMRT"):
     #Get datapoints
 
     # Train_test_val_split. Splitting regarding the structure.
-    train_indices, val_indices, test_indices = data.make_split_indices(mols, "random", (0.8, 0.1, 0.1))
+    train_indices, val_indices, test_indices = data.make_split_indices(
+        mols,
+        "random",
+        (0.8, 0.1, 0.1),
+        seed=42,
+    )
 
     train_data, val_data, test_data = data.split_data_by_indices(
         all_data, train_indices, val_indices, test_indices
@@ -56,7 +61,7 @@ def get_dataloaders (feature_array, target_array, dataset = "SMRT"):
 
     # Dataloaders
 
-    train_loader = data.build_dataloader(train_dset, num_workers=5, persistent_workers=True)
+    train_loader = data.build_dataloader(train_dset, num_workers=5, seed=42, persistent_workers=True)
     val_loader = data.build_dataloader(val_dset, num_workers=5, shuffle=False, persistent_workers=True)
     test_loader = data.build_dataloader(test_dset, num_workers=5, shuffle=False, persistent_workers=True)
 
@@ -236,7 +241,6 @@ def write_parameters_file (param_dict, results_path):
         f.write (f'Parameters used for this model:\n')
         for key,value in param_dict.items():
             f.write (f"{key}: {value}\n")
-
 
 
 

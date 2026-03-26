@@ -17,6 +17,7 @@ Update: Now if the input file does not exist, it will be built.
 import os
 import sys
 from pathlib import Path
+from lightning import pytorch as pl
 from src.training.functions.basic_model_functions import write_metric_txt, metrics_from_dataframe, write_parameters_file
 from src.training.functions.moldesc_model_functions import *
 from src.get_molecular_descriptors.get_molecular_descriptors import add_columns2df
@@ -45,6 +46,7 @@ param_dict = {
 # RUNNIG THE SCRIPT
 
 if __name__ == "__main__":
+    pl.seed_everything(42, workers=True)
     print(f"Check for the dataset given...")
     if not input_file.exists():
         add_columns2df(path2dataset= "./data/no_extra_mol_desc/SMRT_data.csv", dataset="SMRT")

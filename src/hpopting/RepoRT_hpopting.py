@@ -17,6 +17,7 @@ import os
 import sys
 import optuna
 from pathlib import Path
+from lightning import pytorch as pl
 from optuna.search_space import intersection_search_space
 from src.training.functions.splitted_sets_functions import *
 from src.hpopting.hpopting_functions import *
@@ -58,6 +59,7 @@ def build_config (trial):
 
 # Start optimization process.
 if __name__ == "__main__":
+    pl.seed_everything(42, workers=True)
     train_file = Path(input_dir + "train_data.tsv")
     val_file = Path (input_dir + "val_data.tsv")
     test_file = Path (input_dir + "test_data.tsv")

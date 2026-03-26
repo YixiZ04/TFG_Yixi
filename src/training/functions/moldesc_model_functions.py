@@ -38,7 +38,12 @@ def get_dataloaders_with_moldesc (df, dataset = "SMRT"):
     else:
         print(f"Check the dataset given: {dataset}")
         return None
-    train_indices, val_indices, test_indices = data.make_split_indices(mols, "random", (0.8, 0.1, 0.1))
+    train_indices, val_indices, test_indices = data.make_split_indices(
+        mols,
+        "random",
+        (0.8, 0.1, 0.1),
+        seed=42,
+    )
 
     train_data, val_data, test_data = data.split_data_by_indices(
         all_data, train_indices, val_indices, test_indices
@@ -64,7 +69,7 @@ def get_dataloaders_with_moldesc (df, dataset = "SMRT"):
 
     # DataLoaders
 
-    train_loader = data.build_dataloader(train_dset, num_workers=5, shuffle=True)
+    train_loader = data.build_dataloader(train_dset, num_workers=5, shuffle=True, seed=42)
     val_loader = data.build_dataloader(val_dset, num_workers=5, shuffle=False)
     test_loader = data.build_dataloader(test_dset, num_workers=5, shuffle=False)
 
@@ -170,7 +175,6 @@ def get_res_table_moldesc (df, pred_array, test_indices):
                                 "pred_rt": pred_list,
                                 "diff": np.abs (pred_list - real_rt),})
     return res_table
-
 
 
 

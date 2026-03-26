@@ -19,6 +19,7 @@ import sys
 import optuna
 import pandas as pd
 from pathlib import Path
+from lightning import pytorch as pl
 from optuna.search_space import intersection_search_space
 from src.training.functions.basic_model_functions import get_dataloaders
 from src.hpopting.hpopting_functions import *
@@ -55,6 +56,7 @@ def build_config (trial):
 
 # Start optimization process
 if __name__ == "__main__":
+    pl.seed_everything(42, workers=True)
     print(f"Check for the dataset given...")
     if Path (csv_data_file).exists():
         print ("The input dataset is correct...")

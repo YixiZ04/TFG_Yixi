@@ -105,7 +105,7 @@ def get_train_dataloader (train_df):
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer ()
     train_dset = data.MoleculeDataset (all_data[0] , featurizer)
     train_scaler = train_dset.normalize_targets()  # For the targets
-    train_loader = data.build_dataloader(train_dset, num_workers=5, shuffle=True)
+    train_loader = data.build_dataloader(train_dset, num_workers=5, shuffle=True, seed=42)
     return train_loader, train_scaler, len (temp_column_list)  #The last result is the cc_shape
 
 def get_test_val_loader (df, train_scaler):

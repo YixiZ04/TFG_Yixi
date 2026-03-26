@@ -19,6 +19,7 @@ from src.get_raw_data.RepoRT_get_onlymol_data import get_final_dataframe
 import sys
 import os
 from pathlib import Path
+from lightning import pytorch as pl
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
 num_repos = 3                                       # This is the number of dataset from RepoRT used for training.
 input_path = Path("./data/no_extra_mol_desc/RepoRT_only_mol_data.tsv")    #This is the path to the input data. If not existing, will be created,
@@ -41,6 +42,7 @@ param_dict = {
 
 # RUNNING THE SCRIPT
 if __name__ == "__main__":
+    pl.seed_everything(42, workers=True)
     # Make sure the directory exists.
     os.makedirs(path2res, exist_ok=True)
 
@@ -97,6 +99,5 @@ if __name__ == "__main__":
     write_metric_tsv(id_array, mae_array, rmse_array, relmax_array, relmean_array, path2res)
     print ("All files successfully written !")
     sys.exit(0)
-
 
 

@@ -103,7 +103,7 @@ def filter_by_n_mol (df, down_threshold = 100, up_threshold = 5000, apply_upthre
             if down_threshold < temp_df.shape[0] < up_threshold:
                 final_df.append (temp_df)
             elif temp_df.shape[0] > up_threshold:
-                final_df.append (temp_df.sample (up_threshold))
+                final_df.append (temp_df.sample (up_threshold, random_state=42))
             else:
                 continue
     else:

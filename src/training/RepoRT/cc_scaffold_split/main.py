@@ -19,6 +19,7 @@ NOTE: Change dirname in line 28 to customize the saving directory name.
 import os
 import sys
 from pathlib import Path
+from lightning import pytorch as pl
 from src.training.functions.splitted_sets_functions import *
 from src.training.RepoRT.cc_scaffold_split.perform_cc_scaffold_split import cc_ms_split
 
@@ -44,6 +45,7 @@ param_dict = {
 
 
 if __name__ == "__main__":
+    pl.seed_everything(42, workers=True)
     # Assertion for the data type. Match is used here for better generalization if in the future more dataset types will be evaluated.
     match dataset_type:
         case "no_SMRT":  # These following Booleans are used to get the processed dataset if has not been created yet.
@@ -67,9 +69,17 @@ if __name__ == "__main__":
     train_file = Path (split_path + "train_data.tsv")
     test_file = Path (split_path + "test_data.tsv")
     val_file = Path (split_path + "val_data.tsv")
+    dir_report_file = Path (split_path + "dir_assignment_report.tsv")
+    scaffold_report_file = Path (split_path + "scaffold_pruning_report.tsv")
 
     # This conditions checks for the splitting files to exist. If NOT existing, they will be created.
-    if train_file.exists() and val_file.exists() and test_file.exists():
+    if (
+        train_file.exists()
+        and val_file.exists()
+        and test_file.exists()
+        and dir_report_file.exists()
+        and scaffold_report_file.exists()
+    ):
         print ("The input files are correct!")
     else:
         print ("Getting the random_splitted files...")
@@ -85,6 +95,25 @@ if __name__ == "__main__":
     train_df = pd.read_csv(train_file, sep='\t')
     test_df = pd.read_csv(test_file, sep='\t')
     val_df = pd.read_csv(val_file, sep='\t')
+
+    if (
+        train_df.empty
+        or val_df.empty
+        or test_df.empty
+        or not dir_report_file.exists()
+        or not scaffold_report_file.exists()
+    ):
+        print ("Found empty split files. Rebuilding the constrained split...")
+        cc_ms_split (ms_complete_file= ms_complete_file,
+                     save_dir=split_path,
+                     random_seed=random_seed,
+                     processed_file=input_file,
+                     save_complete_ms_dir=ms_complete_save_dir,
+                     drop_smrt=drop_smrt,
+                     apply_upthreshold=apply_upthreshold)
+        train_df = pd.read_csv(train_file, sep='\t')
+        test_df = pd.read_csv(test_file, sep='\t')
+        val_df = pd.read_csv(val_file, sep='\t')
 
     print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)

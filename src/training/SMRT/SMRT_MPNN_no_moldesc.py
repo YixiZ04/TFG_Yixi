@@ -12,6 +12,7 @@ The model has Early Stopping mechanism implemented.
 from src.training.functions.basic_model_functions import *
 import sys
 import os
+from lightning import pytorch as pl
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
 csv_data_file = "./data/no_extra_mol_desc/SMRT_data.csv"        #If not existing, it should be downloaded on internet. DO NOT USE FILE WITH MOL DESC
@@ -35,6 +36,7 @@ param_dict = {
 
 # Run the script
 if __name__ == "__main__":
+    pl.seed_everything(42, workers=True)
     print (f"Check for the dataset given...")
     try:
         df = pd.read_csv(csv_data_file, sep = ";")
@@ -64,4 +66,3 @@ if __name__ == "__main__":
     write_metric_txt (mae, rmse, path2res)
     print ("Successfully trained the model and got the results!")
     sys.exit(0)
-
