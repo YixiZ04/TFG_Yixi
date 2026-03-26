@@ -137,7 +137,7 @@ def get_new_formula (df):
             formula_array.append (formula)
         except:
             try:
-                formula = get_mol_formula_by_inchi(row["smiles.std"])
+                formula = get_mol_formula_by_smiles(row["smiles.std"])
                 formula_array.append (formula)
             except:
                 formula_array.append (row["formula"])
@@ -401,7 +401,6 @@ def get_raw_datatable(save_dir = save_dir):
 #Get raw datatable
 if __name__ == "__main__":
     get_raw_datatable()
-
 
 
 
