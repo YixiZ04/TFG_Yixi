@@ -25,7 +25,7 @@ from sklearn.preprocessing import StandardScaler
 
 import torch
 from lightning import pytorch as pl
-from lightning.pytorch.callbacks import EarlyStopping
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
 #DEFINE FUNCTIONS
 def get_scaled_input_train_data (train_df):
@@ -162,18 +162,27 @@ def complete_cc_configure_train_model (scaler, train_loader, val_loader,param_di
         mode="min",
         patience=10,  # Patience set to 10
     )
+    checkpoint_cb = ModelCheckpoint(
+        dirpath=results_path,
+        filename="best-{epoch}-{val_loss:.4f}",
+        monitor="val_loss",
+        mode="min",
+        save_top_k=1,
+    )
     trainer = pl.Trainer(
         logger=False,
         enable_progress_bar=False,
         accelerator=param_dict["accelerator"],
         devices=1,
         max_epochs=param_dict["max_epochs"],
-        callbacks=[es_cb],
+        callbacks=[es_cb, checkpoint_cb],
     )
 
     # 7. Training
 
     trainer.fit(mpnn, train_loader, val_loader)
+    if checkpoint_cb.best_model_path:
+        mpnn = models.MPNN.load_from_checkpoint(checkpoint_cb.best_model_path)
 
     # 8. Saving the trained weights and biases only. The architecture will not be saved.
     if save_model:
