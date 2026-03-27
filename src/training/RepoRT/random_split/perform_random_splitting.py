@@ -23,6 +23,10 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 
+# @todo Decide whether to delete the __main__ block below or update it to pass the
+# required arguments explicitly. At line 71 this function is called as
+# split_train_val_test() with no arguments, but its signature requires
+# input_path, output_dir, drop_smrt, and apply_upthreshold.
 def split_train_val_test (input_path, output_dir, drop_smrt, apply_upthreshold):
     """
     Uses the scaled_complete_df to perform train_test_split.
