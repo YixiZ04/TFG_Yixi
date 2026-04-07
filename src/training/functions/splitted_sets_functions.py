@@ -190,19 +190,14 @@ def complete_cc_configure_train_model (scaler, train_loader, val_loader,param_di
         torch.save(mpnn.state_dict(), save_model_path)
     return mpnn, trainer
 
-def get_res_table (test_df, pred_array, save_dir, save_results=True):
-    """
-        Update: A new Boolean save_results has been added as a parameter. This is mainly added for the update of model_per_repo/main.py to get the result table.
-        As it has been set to True when not defined, other scripts that used this function do not have to be modified.
-    """
+def get_res_table (test_df, pred_array, save_dir):
     temp_df = test_df [["dir_id","molecule_id", "inchi.std", "rt_s", "max_rt", "mean_rt"]]
     temp_df ["pred_rt"] = pred_array
     temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt_s"])
     temp_df ["rel_error_max"] = temp_df ["diff"]*100 / temp_df["max_rt"]
     temp_df ["rel_error_mean"] = temp_df ["diff"]*100 / temp_df["mean_rt"]
     filename = save_dir + "Results.tsv"
-    if save_results:
-        temp_df.to_csv(filename, sep="\t", index=False)
+    temp_df.to_csv(filename, sep="\t", index=False)
     return temp_df
 
 def metrics_from_dataframe (df):

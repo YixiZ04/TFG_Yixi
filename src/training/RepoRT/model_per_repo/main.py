@@ -1,37 +1,29 @@
 """
 Name: RepoRT_MPNN_each_repo.py
 Author: Yixi Zhang
-Date: March 2026/April 2026
-Version: 1.1
-Usege: Builds individuals MPNN using data from every RepoRT's subsets (0001, 0002...
+Date: March 2026
+Version: 1.0
+Usege: Builds individuals MPNN using data from every RepoRT's subsets (0001, 0002...) WITH NO MOL DESCs So the input data could be:
+    1. "./data/no_extra_mol_desc/RepoRT_only_mol_data.tsv"
+    2. "./data/with_extra_mol_desc/RepoRT_only_mol_data.tsv"
 In total, there will be 3 main result files saved in the result directory (should be defined):
-    1. metric.txt. This file contains the aggregated metrics (MAE, RMSE, %errors) calculated from Results.tsv. Might not be as interesting as the last result file,
-    but it is interesting if wanted to have a quick idea of the difference of the results.
+    1. Metrics.tsv: a tsv file that contains the MAE and RMSE from results of each individual dataset used for training.
     2. Parameters.txt: a txt file containing the parameters used for building the MPNN. It is shared by all repositories.
     3. Results.tsv: a tsv file containing the prediction results for each subset of RepoRT.
-    4. metrics_per_cc.tsv. This is the original "Metrics.tsv", but this now contains more results metrics (%error to mean and max RT).
-Update: This will use the total processed RepoRT dataset for making sure that the repos used in this Script corresponds with the repos remaining after processing.
-With this update, very similar Scripts will be removed and the results will be comparable to those obtained with models trained using all data.
-The result files are the exact same as the result files for other cases (random_split e.g.).The only difference being on how those results are obtained.
 """
 
 # IMPORT THE FUNCTIONS NEEDED
 
-import os
+from src.training.functions.basic_model_functions import *
+from src.get_raw_data.RepoRT_get_onlymol_data import get_final_dataframe
 import sys
-import numpy as np
-import pandas as pd
+import os
 from pathlib import Path
-from chemprop import  nn
 from lightning import pytorch as pl
-from src.training.functions.basic_model_functions import get_dataloaders, configure_and_train_mpnn
-from src.training.functions.splitted_sets_functions import get_res_table, metrics_from_dataframe,write_parameters_file, write_metrics_per_cc, write_metric_txt
-from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
-
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
-input_path = Path("./data/processed_RepoRT/")           #This is the path to the input data. If not existing, will be created,
-dataset_type = "no_SMRT" #Or with_SMRT, depends on the type of input dataset to use.
-path2res = os.path.join(".", "logs","RepoRT", dataset_type, "model_per_repo", "dirname/") #Change "dirname" for any name you want.
+num_repos = 3                                       # This is the number of dataset from RepoRT used for training.
+input_path = Path("./data/no_extra_mol_desc/RepoRT_only_mol_data.tsv")    #This is the path to the input data. If not existing, will be created,
+path2res = "./logs/RepoRT/model_per_repo/no_mol_desc/Results_0/"
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -41,8 +33,8 @@ param_dict = {
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
-    "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
+    "max_epochs": 40,                                 # Set to a smaller number as the datasets here are much smaller.
+    "dropout_rate": 0,                                # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
@@ -51,65 +43,61 @@ param_dict = {
 # RUNNING THE SCRIPT
 if __name__ == "__main__":
     pl.seed_everything(42, workers=True)
-
-    # Assertion for the data type. Match is used here for better generalization if in the future more dataset types will be evaluated.
-    match dataset_type:
-        case "no_SMRT":     #These following Booleans are used to get the processed dataset if has not been created yet.
-            drop_smrt = True
-            apply_upthreshold = False
-            processed_filename = "no_SMRT_no_ds_data.tsv" #filename for the processed .tsv file.
-        case "with_SMRT":
-            drop_smrt = False
-            apply_upthreshold = True
-            processed_filename = "with_SMRT_ds_data.tsv"
-        case _:
-            raise NameError (f"Check the dataset_type: {dataset_type}.")
-
-    input_file = os.path.join(input_path, processed_filename)
-
-    # Checking fot the input file existence
-
-    if not Path(input_file).exists():
-        print (f"Making the input file: {input_file}...")
-        get_processed_df_from_raw(drop_smrt=drop_smrt,
-                                  apply_upthreshold=apply_upthreshold,)
-    print ("Getting the input df...")
-    df = pd.read_csv (input_file, sep="\t")
-
     # Make sure the directory exists.
-    print ("Checking for the output directory...")
     os.makedirs(path2res, exist_ok=True)
 
+    #Import the df.
+    if input_path.exists():
+        print ("The input file is correct!")
+    else:
+        print ("The file does not exist. Building the file...")
+        get_final_dataframe() #If not found, this will build the file from scratch.
+    print("Importing the datafile...")
+    df = pd.read_csv(input_path, sep='\t')
+
     #Training process.
-    dir_id_array = np.unique (df["dir_id"])
-    results_array = []          # This array will be used store dfs to build a large df for results, where all the metrics will be calculated.
-    for dir_id in dir_id_array[:2]:
-        temp_df = df[df["dir_id"] == dir_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
-        temp_df = temp_df.sample (50)         #Run this to have a quick test of the Script's usage
+    res_array = []
+    mae_array = []
+    rmse_array = []
+    relmax_array = []
+    relmean_array = []
+    id_array = []
+    for id in range (1, num_repos + 1):
+        temp_df = df[df["dir_id"] == id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
+        if temp_df.shape [0] != 0:              # This double checks for empty dfs, might be redundant.
+            # temp_df = temp_df.sample (50)     #Run this to have a quick test of the Script's usage
 
-        # Build a model for each repo.
-        inchis_array = temp_df.loc [:, "inchi.std"].values
-        rts = temp_df.loc [:, ["rt_s"]].values
-        scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=inchis_array,
-                                                                                      target_array=rts)
-        mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
+            # Building MPNN for each repo
+            smiles_array = temp_df.loc [:, "smiles.std"].values
+            rts = temp_df.loc [:, ["rt_s"]].values
+            scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=smiles_array, target_array=rts, dataset="RepoRT")
+            mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
+            test_pred = trainer.predict(mpnn, test_loader)
+            test_pred = np.concatenate(test_pred, axis=0)
+            # GETTING RESULTS
+            res_df = get_res_table_RepoRT (temp_df, test_indices, test_pred)
+            mae, rmse, mean_rel_error_max_rt, mean_rel_error_mean_rt = metrics_from_dataframe_RepoRT (res_df)
+            res_array.append (res_df)
+            mae_array.append (mae)
+            relmax_array.append (mean_rel_error_max_rt)
+            relmean_array.append (mean_rel_error_mean_rt)
+            rmse_array.append (rmse)
+            id_array.append (id)
+        else:
+            print (f"The repo nº {id} does not contain any data. It will be skipped.")
+            continue
 
-        test_pred = trainer.predict(mpnn, test_loader)
-        test_pred = np.concatenate(test_pred, axis=0)
-        # GETTING RESULTS
-        print (f"Getting results for the repo {dir_id}")
-        temp_test_df = temp_df.iloc [test_indices[0]]
-        temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False)
-        results_array.append(temp_res_table)
-    print (f"Writting the final result files in {path2res}...")
-    res_table = pd.concat (results_array, ignore_index=True)
-    res_table.to_csv (path2res+ "Results.tsv", sep = "\t", index = False)
-    mae, rmse, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
+    # HERE THE OVERALL RESULTS ARE WRITTEN INTO A SINGLE FILE
+    print ("Writing the parameters' file...")
     write_parameters_file(param_dict, path2res)
-    write_metrics_per_cc(res_table, path2res)
-    write_metric_txt(mae, rmse, rel_max_error, rel_mean_error, path2res)
-
-    print ("The resuls written successfully! Exiting the program...")
+    # Get the result table.
+    final_res_table = pd.concat (res_array)
+    filename = path2res + "Results_table.tsv"
+    print ("Writing the Results table...")
+    final_res_table.to_csv (filename, index = False)
+    print ("Writing the metrics' file...")
+    write_metric_tsv(id_array, mae_array, rmse_array, relmax_array, relmean_array, path2res)
+    print ("All files successfully written !")
     sys.exit(0)
 
 

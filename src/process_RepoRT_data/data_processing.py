@@ -44,12 +44,10 @@ def keep_only_useful_columns (df):
     df = df.drop (columns = columns_to_drop)
     return df
 
-def update_df_drop_grad (df, threshold, only_metadata=False):
+def update_df_drop_grad (df, threshold):
     """
     Given a pandas Dataframe and a threshold, which is the number of gradient from where to drop the gradient data.
     Output: An updated dataframe with the molecules from those repos whose gradient data is > threshold and the columns containing that information dropped.
-    Update: A boolean only_metadata; this is added for the script get_project_metadata.py; it has been set to False as default value, so for other usages,
-    no changes have to be made.
     """
     drop_index_array = []
     fr_threshold = f"flow rate [ml/min]_{threshold}"
@@ -62,8 +60,7 @@ def update_df_drop_grad (df, threshold, only_metadata=False):
             drop_index_array.append (index)
         else:
             continue
-    if only_metadata:
-        return drop_index_array, threshold
+
     new_temp_df = df[~df["dir_id"].isin(drop_index_array)] #Here, a treated df is built dropping those repositories having > threshold gradient.
     # Drop those columns containing those data.
     position = new_temp_df.columns.get_loc("flow rate [ml/min]_10") + 1
@@ -91,17 +88,15 @@ def get_max_mean_rt_per_cc (complete_df):
     complete_df.insert (position + 1, "max_rt", max_array)
     complete_df.insert (position + 2, "mean_rt", mean_array)
 
-def filter_by_n_mol (df, down_threshold = 100, up_threshold = 5000, apply_upthreshold = False, only_metadata=False):
+def filter_by_n_mol (df, down_threshold = 100, up_threshold = 5000, apply_upthreshold = False):
     """
     Input: A threshold for filtering RepoRT data. Those repositories containing less than threshold number of molecule will be removed.
     If the cc has more molecules than up_threshold, a downsampling will be applied to that repo and retains the up_threshold number of molecules.
     apply_upthreshold (False): Boolean to decide whether to perform downsampling or not.
     Output: The updated dataframe containing the filtered data.
-    Update: A boolean only_metadata; this is added for the script get_project_metadata.py; it has been set to False as default value, so for other usages,
-    no changes have to be made.
     """
     index_array = np.unique (df["dir_id"])
-    final_df, dropped_repo, ds_repo = [], [], []
+    final_df = []
     if apply_upthreshold:
         for index in index_array :
             temp_df = df[df["dir_id"] == index]
@@ -109,9 +104,7 @@ def filter_by_n_mol (df, down_threshold = 100, up_threshold = 5000, apply_upthre
                 final_df.append (temp_df)
             elif temp_df.shape[0] > up_threshold:
                 final_df.append (temp_df.sample (up_threshold, random_state=42))
-                ds_repo.append (index)
             else:
-                dropped_repo.append (index)
                 continue
     else:
         for index in index_array:
@@ -119,10 +112,7 @@ def filter_by_n_mol (df, down_threshold = 100, up_threshold = 5000, apply_upthre
             if down_threshold < temp_df.shape[0]:
                 final_df.append(temp_df)
             else:
-                dropped_repo.append (index)
                 continue
-    if only_metadata:
-        return dropped_repo, ds_repo
     return pd.concat (final_df)
 
 
