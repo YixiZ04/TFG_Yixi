@@ -25,8 +25,8 @@ from src.training.RepoRT.cc_scaffold_split.perform_cc_scaffold_split import cc_m
 
 # DEFINE PARAMETERS
 
-dataset_type = "with_SMRT" #Or with_SMRT, depends on the type of input dataset to use.
-path2res = os.path.join(".", "logs","RepoRT", dataset_type, "cc_scaffold_split", "dirname/") #Change "dirname" for any name you want.
+dataset_type = "no_SMRT" #Or with_SMRT, depends on the type of input dataset to use.
+path2res = os.path.join(".", "logs","RepoRT", dataset_type, "cc_sccafold_split", "dirname/") #Change "dirname" for any name you want.
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -42,6 +42,8 @@ param_dict = {
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
+
+
 
 
 if __name__ == "__main__":
@@ -142,3 +144,4 @@ if __name__ == "__main__":
     write_metric_txt(mae, rmse, rel_max_error, rel_mean_error, path2res)
 
     print ("The resuls written successfully! Exiting the program...")
+    sys.exit(0)
