@@ -2,37 +2,33 @@
 Name: train_basic_model.py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.0
+Version: 1.1,
 This file contains the basic functions to train a chemprop model with no mol_descs.
+Update: Eliminated all functions related to RepoRT, as they are redundant comparing to splitted_sets_functions.py's functions
+which are more specific and robust.
+
 """
 
 # 0. Import modules
 
 import pandas as pd
 import numpy as np
+import torch
 from chemprop import data, nn, models, featurizers
 from rdkit.Chem.inchi import MolFromInchi
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
-import torch
 
 
 # BUILD AND CONFIGURE chemprop.MPNN.
-def get_dataloaders (feature_array, target_array, dataset = "SMRT"):
+def get_dataloaders (feature_array, target_array):
     """
     Input: a pandas dataframe containing the information for training.
     Outputs: Scaler used for scaling the targets. Train, val and test dataloaders built from the the dataframe. An array contaning the test indices.
     """
     # Convert the raw data to mol objects for getting the graph representation
-    if dataset == "SMRT": #Mol objects from Inchi
-        mols = [MolFromInchi(inchi, sanitize=False) for inchi in feature_array]
-        all_data = [data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, target_array)]  # DataPoints
-    elif dataset == "RepoRT": #Build the mol object from SMILES
-        all_data = [data.MoleculeDatapoint.from_smi(smi, rt) for smi, rt in zip(feature_array, target_array)]
-        mols = [ d.mol for d in all_data ]
-    else:
-        print (f"Check the dataset given: {dataset}")
-        return None
+    mols = [MolFromInchi(inchi, sanitize=False) for inchi in feature_array]
+    all_data = [data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, target_array)]  # DataPoints
 
     #Get datapoints
 
@@ -131,7 +127,7 @@ def configure_and_train_mpnn (scaler, train_loader, val_loader, param_dict, resu
 
 # RESULT FILES AND METRICS
 
-def get_res_table_SMRT (df, pred_array, test_indices):
+def get_res_table (df, pred_array, test_indices):
     """
     Input: An array containing InChi, another containing target and last one containing the prediction (Test set)
     Output: A pandas dataframe with the prediction table. The exportation should be done outside the function.
@@ -157,62 +153,6 @@ def get_res_table_SMRT (df, pred_array, test_indices):
                                 })
     return res_table
 
-def get_res_table_RepoRT (df, test_indices, pred_array):
-    """
-    Inputs: A pandas dataframe containing the data used for training. An array (2D) containing the test indices. An array containing the results from prediction.
-    A filename (Absolute path + filename, e.g.). to save the .tsv file.
-    Output: A pandas dataframe containing the results and the differences (Not sorted) and a saved .tsv file in the indicated dir path.
-    """
-    id_array = df.loc [:,"molecule_id"].values
-    smiles = df.loc [:,"smiles.std"].values
-    real_rts = df.loc [:,"rt_s"].values
-    max_rts = df.loc [:,"max_rt"].values
-    mean_rts = df.loc [:,"mean_rt"].values
-    test_ids = []
-    test_smiles = []
-    test_rts = []
-    pred_res = []
-    max_array = []
-    mean_array = []
-    for index in test_indices [0]:
-        id = id_array[index]
-        smile = smiles[index]
-        real_rt = real_rts[index]
-        max_rt = max_rts[index]
-        mean_rt = mean_rts[index]
-        test_ids.append(id)
-        test_smiles.append(smile)
-        test_rts.append (real_rt)
-        max_array.append (max_rt)
-        mean_array.append (mean_rt)
-    for res in pred_array:
-        pred_res.append(round(res[0],2))
-    test_rts = np.array(test_rts)
-    pred_res = np.array(pred_res)
-    max_rt = np.array(max_array)
-    mean_rt = np.array(mean_array)
-    result_table = pd.DataFrame ({ "id": test_ids,
-                                    "smile": test_smiles,
-                                    "real_rt": test_rts,
-                                    "pred_rt": pred_res,
-                                    "max_rt": max_array,
-                                    "mean_rt": mean_array,
-                                    "diff": np.abs (test_rts - pred_res),
-                                    "rel_error_max_rt": np.abs (test_rts - pred_res)*100/max_array,
-                                    "rel_error_mean_rt": np.abs (test_rts - pred_res)*100/mean_array
-    })
-    return result_table
-
-def metrics_from_dataframe_RepoRT (df):
-    """
-    Input: DataFrame with "diff" column..
-    Output: MAE and RMSE calculated from those values.
-    """
-    mae = np.mean (df["diff"])
-    rmse = np.sqrt(np.mean (df["diff"] ** 2))
-    mean_rel_error_max_rt = np.mean (df["rel_error_max_rt"])
-    mean_rel_error_mean_rt = np.mean (df["rel_error_mean_rt"])
-    return mae, rmse, mean_rel_error_max_rt, mean_rel_error_mean_rt
 def metrics_from_dataframe (df):
     """
     Input: DataFrame with "diff" column..
@@ -226,14 +166,6 @@ def write_metric_txt (mae, rmse, results_path):
     filename = results_path + "metrics.txt"
     with open (filename, "w") as f:
         f.write (f'MAE: {mae:.4f} s\nRMSE: {rmse:.4f} s.\n')
-
-def write_metric_tsv (id_array, mae_array, rmse_array,relmax_array, relmean_array, results_path):
-    """
-    Given an id_array, mae_array and rmse_array, exports a tsv containing those data.
-    """
-    filename = results_path + "metrics.tsv"
-    metrics_df = pd.DataFrame({"dir_id":id_array, "mae": mae_array, "rmse": rmse_array, "relative_error_to_max_rt (%)":relmax_array, "relative_error_to_mean_rt (%)":relmean_array})
-    metrics_df.to_csv (filename, sep = "\t", index = False)
 
 def write_parameters_file (param_dict, results_path):
     filename = results_path + "parameters.txt"

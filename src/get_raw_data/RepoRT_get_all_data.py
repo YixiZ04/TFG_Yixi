@@ -2,7 +2,7 @@
 Name: RepoRT_get_all_data.py
 Author: Yixi Zhang
 Date: March 2026.
-Version: 1.1.
+Version: 1.2.
 This will get the raw data from RepoRT and merge them into one single dataframe them export it to a tsv file.
 Some preprocessing to the data will be done:
     1. All NA values would be filled with zero in the gradient data, but the flowrate values.
@@ -25,17 +25,23 @@ Update: In the previous version, the doublets was not considered, meaning that i
 so now in this new version, this is fixed by overwriting the canonical SMILES with the isomeric SMILES if possible.
 Also, the flowrate data has also been better treated, as in the previous version, the nan values in flow_rate data was not considered, so in the final datafile it is 0 in those repositories
 where flowrate = nan; in this version, this has been fixed by filling them with mean flowrate values.
+
+Update (1.2.): A boolean has been implemented to get the project metadata in many functions.
+
+Fix: A problem happened before this fix: a not frequent but happens, that the isomeric_success.tsv file does not exist at all when the canonical_success.tsv file does.
+So, if this were the case (repo nº0206, e.g.), the rt data would not be fetched for those repos, even though, canonical SMILES existed.
+This has been solved by implementing a nested try statement in line 112.
 """
 # Import modules
 
 import numpy as np
 import pandas as pd
 import os
+import urllib.error
 from rdkit.Chem.inchi import MolFromInchi
 from rdkit.Chem import MolFromSmiles
 from rdkit.Chem.rdMolDescriptors import CalcMolFormula
 from sklearn.preprocessing import OneHotEncoder
-import sys
 
 # Define the base url for fetching metadata and gradient data from RepoRT. This process will be ignored if already done once.
 seed_url = "https://raw.githubusercontent.com/michaelwitting/RepoRT/refs/heads/master/processed_data/"
@@ -87,29 +93,37 @@ def get_mol_formula_by_smiles (smiles):
     return formula
 #GETTING RETENTION TIME DATA
 
-def get_rt_data (num_repos=num_repos,seed_url=seed_url):
+def get_rt_data (num_repos=num_repos,seed_url=seed_url, only_metadata=False):
     """
     Input: num_repos to fetch, and the seed url for RepoRT.
     Output: a table containing the RT data fetched from RepoRT.
     Update: fixed the concept error, as now the isomeric success will only be used for updating the cononical success data table.
+    Update2: A boolean only_metadata; this is added for the script get_project_metadata.py; it has been set to False as default value, so for other usages,
+    no changes have to be made.
     """
     final_dataframe = pd.DataFrame()
     index_array = get_index_array(num_repos)
+    not_found_array = []
     for index in index_array:
         can_url = f"{seed_url}{index}/{index}_rtdata_canonical_success.tsv"
         iso_url = f"{seed_url}{index}/{index}_rtdata_isomeric_success.tsv"
         print (f"Fetching RT data for nº{index}...")
         try:
             temp_dataframe_can = pd.read_csv(can_url, sep="\t", encoding="utf-8")
-            temp_dataframe_iso = pd.read_csv(iso_url, sep="\t", encoding = "utf-8")
-            # Use the id of the molecule as index followed by the updating.
-            temp_dataframe_can = temp_dataframe_can.set_index ("id")
-            temp_dataframe_iso = temp_dataframe_iso.set_index ("id")
-            temp_dataframe_can.update(temp_dataframe_iso) #Here, if isomiric success is not emply
-            temp_dataframe_can = temp_dataframe_can.reset_index ()
-            final_dataframe = pd.concat ([final_dataframe, temp_dataframe_can], ignore_index=True)
-        except: #The only error here is that the URL has not been found
+            # This nested try statement avoids a not frequent but has cases where isomeric file does not exist at all, but the canonical exists.
+            try:
+                temp_dataframe_iso = pd.read_csv(iso_url, sep="\t", encoding = "utf-8")
+                temp_dataframe_iso = temp_dataframe_iso.set_index ("id")
+                temp_dataframe_can = temp_dataframe_can.set_index("id")
+                temp_dataframe_can.update(temp_dataframe_iso)
+                temp_dataframe_can = temp_dataframe_can.reset_index()
+            except (urllib.error.HTTPError, pd.errors.EmptyDataError):
+                print (f"Isomeric data is not found for repo nº{index}")
+            final_dataframe = pd.concat([final_dataframe, temp_dataframe_can], ignore_index=True)
+        except (urllib.error.HTTPError, pd.errors.EmptyDataError):
+            not_found_array.append (index)
             print (f"The repo nº {index} has not been found in the dataset. It will be skipped...")
+
     dir_id_array = [idmol.split("_")[0] for idmol in final_dataframe["id"]]
     dir_id_array = np.array(dir_id_array)
     final_dataframe = final_dataframe.rename(columns={"id":"molecule_id"})
@@ -121,6 +135,8 @@ def get_rt_data (num_repos=num_repos,seed_url=seed_url):
     final_dataframe.insert(position, "rt_s", rt_s_array)
     final_dataframe ["rt_s"] = round(final_dataframe ["rt_s"],2)
     del temp_dataframe_can, temp_dataframe_iso, dir_id_array
+    if only_metadata:
+        return not_found_array, final_dataframe
     return final_dataframe
 
 def get_new_formula (df):
@@ -292,19 +308,25 @@ def get_one_hot_encoded_df (df):
 
 # TREATING GRADIENT INFORMATION
 
-def get_gradient_data (num_repos = num_repos, seed_url = seed_url):
+def get_gradient_data (num_repos = num_repos, seed_url = seed_url, fillna=True, only_metadata=False):
     """
     Works in the same way as the previous get_column_metadata functions.
-    The resulting df of each row has the gradient data for its dataset
+    The resulting df of each row has the gradient data for its dataset.
+    Update: fillna Boolean, as default it is set to True; however, if set to False, all na values will be kept.
+    This update has been made because of RepoRT_metagrad_data,py.
+    Update2: A boolean only_metadata; this is added for the script get_project_metadata.py; it has been set to False as default value, so for other usages,
+    no changes have to be made.
     """
     index_array = get_index_array (num_repos)
     final_df = pd.DataFrame()
+    grad_not_found_array = []
     for index in index_array:
         grad_url = f'{seed_url}{index}/{index}_gradient.tsv'
         print (f"Fetching gradient data for nº{index}...")
         try:
             temp_df = pd.read_csv(grad_url, sep="\t", encoding= "utf-8") #Directly read the tsv from the url
             if temp_df ["t [min]"].isna ().any() or len(temp_df) == 0: #There are 2 conditions because there are 2 possibilities: It could a df having empty rows or with no any rows.
+                grad_not_found_array.append(index)
                 print (f"The gradient data for repo {index} is not available. This repo will be skipped...")
             else:
                 temp_df_row_final = pd.DataFrame ()
@@ -325,7 +347,10 @@ def get_gradient_data (num_repos = num_repos, seed_url = seed_url):
                 final_df = pd.concat ([final_df, temp_df_row_final], ignore_index = True) # Contains all the flattened gradient data for all dataset.
         except:
             print (f"The repo nº {index} has not been found in the dataset. And it will be skipped...")
-    final_df = final_df.fillna (0)
+    if fillna:
+        final_df = final_df.fillna (0)
+    if only_metadata:
+        return grad_not_found_array, final_df
     del temp_df, temp_df_row_final, temp_df_row
     return final_df
 
@@ -339,7 +364,6 @@ def update_flow_rate (df, max_grad_num = 18):
     updated_df = []
     index_array = np.unique(df["dir_id"])
     for index in index_array:
-        print (index)
         temp_df = df[df["dir_id"] == index].reset_index(drop = True)
         fr_array = temp_df.loc [:,"column.flowrate"].values
         for grad_index in range(max_grad_num):

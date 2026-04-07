@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     print ("Making the result files...")
     write_parameters_file(param_dict, path2res)
-    res_table = get_res_table_SMRT(df, test_pred, test_indices)
+    res_table = get_res_table(df, test_pred, test_indices)
     res_table.to_csv (path2res + "Result_table.tsv", sep = '\t', index = False)
     mae, rmse = metrics_from_dataframe(res_table)
     write_metric_txt (mae, rmse, path2res)
