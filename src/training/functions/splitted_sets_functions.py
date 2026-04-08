@@ -59,29 +59,6 @@ def get_scaled_datasets (df, train_input_scaler):
     df [columns_used] = train_input_scaler.transform(df[columns_used])
     return df
 
-def scaling_meta_grad_data (updated_df):
-    """
-    Requieres a df that only contains 1 metadata and gradient data per repo.
-    Returns the same dataframe but scaled.
-    """
-    temp_df = updated_df.loc[:, "column.length":].astype(float)
-    std_scaler = StandardScaler()
-    scaled_array = std_scaler.fit_transform(temp_df)
-    for column, array in zip (temp_df.columns, scaled_array.transpose()):
-        temp_df[column] = array
-    temp_df.insert(0, "dir_id", updated_df["dir_id"])
-    return temp_df
-
-def get_complete_scaled_df (df, updated_df):
-    """
-    Use the previous unscaled dataframe and the scaled metadata and gradient dataframe.
-    And merges them together to get the complete scaled dataframe.
-    """
-    temp_df = df.loc[:, :"column.usp.code_nan"]
-    final_df = pd.merge (temp_df, updated_df, on = "dir_id", how = "inner")
-    return final_df
-
-
 def get_train_dataloader (train_df):
     """
     Input: The df containing the training data.
