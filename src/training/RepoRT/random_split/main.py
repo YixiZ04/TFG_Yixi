@@ -2,7 +2,7 @@
 Name: training/RepoRT/random_split/main.py
 Author: Yixi Zhang.
 Date: March 2026
-Version: 1.3.
+Version: 1.4.
 Usage: Run the file to train and configure a MPNN using chemprop and processed data randomly split from RepoRT.
 If the input datafiles do not exist, they will be built.
 Update (1.1.): adapted to splitted_sets_functions.py version 1.1.
@@ -12,7 +12,8 @@ Update (1.3.): added an option to evaluate different datasets, for now, two type
     2. All RepoRT but downsampled those Repositories with >5000 molecuels (with_SMRT).
     If in the future, more datasets shuold be evaluated, this Script is easily extendable.
     (This could also be considered as adapting the version 1.2. of data_processing.py)
-NOTE: Change dirname in line 28 to customize the saving directory name.
+NOTE: Change dirname in line 32 to customize the saving directory name.
+Update (1.4); added the option to train model with molecular descriptors.
 """
 
 #IMPORT MODULES
@@ -25,8 +26,11 @@ from src.training.RepoRT.random_split.perform_random_splitting import split_trai
 
 # DEFINE PARAMETERS
 
-dataset_type = "no_SMRT" #Or with_SMRT, depends on the type of input dataset to use.
-path2res = os.path.join(".", "logs","RepoRT", dataset_type, "random_split", "dirname/") #Change "dirname" for any name you want.
+dataset_type = "no_SMRT"                                                                         #Or with_SMRT, depends on the type of input dataset to use.
+using_moldescs = False                                                                           # Set to True if want to use molecular descriptors for the model
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, "random_split", "dirname/") #Change "dirname" for any name you want.
+path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -37,7 +41,7 @@ param_dict = {
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
+    "dropout_rate": 0,                                # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
@@ -84,15 +88,28 @@ if __name__ == "__main__":
     print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)
 
-    print("Scaling the the metadata and gradient data using train Scaler...")
-    train_df, train_input_scaler = get_scaled_input_train_data(train_df)
-    val_df = get_scaled_datasets(val_df, train_input_scaler)
-    test_df = get_scaled_datasets(test_df, train_input_scaler)
+    if using_moldescs:
+        print ("Scaling the molecular descriptors...")
+        train_df = add_moldescs(train_df, path2moldesc)
+        test_df = add_moldescs(test_df, path2moldesc)
+        val_df = add_moldescs(val_df, path2moldesc)
+        scaled_train_df, moldesc_scaler = get_scaled_moldescs_train(train_df)
+        scaled_test_df = get_scaled_moldesc_testval(test_df, moldesc_scaler)
+        scaled_val_df = get_scaled_moldesc_testval(val_df, moldesc_scaler)
+        print("Scaling the the metadata and gradient data using train Scaler...")
+        scaled_train_df, train_input_scaler = get_scaled_input_train_data(scaled_train_df)
+        scaled_val_df = get_scaled_datasets(scaled_val_df, train_input_scaler)
+        scaled_test_df = get_scaled_datasets(scaled_test_df, train_input_scaler)
+    else:
+        print("Scaling the the metadata and gradient data using train Scaler...")
+        scaled_train_df, train_input_scaler = get_scaled_input_train_data(train_df)
+        scaled_val_df = get_scaled_datasets(val_df, train_input_scaler)
+        scaled_test_df = get_scaled_datasets(test_df, train_input_scaler)
 
     print ("Getting the DataLoaders...")
-    train_loader, scaler, cc_shape = get_train_dataloader(train_df)
-    val_loader = get_test_val_loader(val_df, scaler)
-    test_loader = get_test_val_loader(test_df, scaler)
+    train_loader, scaler, cc_shape = get_train_dataloader(scaled_train_df, using_moldescs=using_moldescs)
+    val_loader = get_test_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
+    test_loader = get_test_val_loader(scaled_test_df, scaler, using_moldescs=using_moldescs)
 
     print ("Building and training the model...")
     mpnn, trainer = complete_cc_configure_train_model(scaler, train_loader, val_loader, param_dict, cc_shape = cc_shape,results_path=path2res, save_model=True)
@@ -101,7 +118,7 @@ if __name__ == "__main__":
 
     test_pred = trainer.predict(mpnn, test_loader)
     test_pred = np.concatenate(test_pred, axis=0)
-    res_table = get_res_table(test_df, test_pred, path2res)
+    res_table = get_res_table(test_df, test_pred, path2res, using_moldescs=using_moldescs)
     mae, rmse, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
     write_parameters_file(param_dict, path2res)
     write_metrics_per_cc(res_table, path2res)

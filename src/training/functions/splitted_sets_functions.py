@@ -2,7 +2,7 @@
 Name: splitted_sets_functions,py
 Author: Yixi Zhang
 Date: March 2026
-Version: 1.2.
+Version: 1.3.
 Description: contains the functions needed for training a MPNN (chemprop) with random split RepoRT data and write the result files.
 To do so, run ./src/training/RepoRT/random_split/main.py
 Update (1.1.): A concept error was made in the previous version, as targets of each dataloader was scaled using a different Scaler. In this version, that has been fixed and a new function has been defined to
@@ -13,9 +13,11 @@ Update (1.2.): The functions to get the train scaler for the input (metadata and
 is that the input files is no longer scaled but are scaled just before training.
 IMPORTANT: Here, the scaling data is not the whole dataset, but the metadata and gradient data for each repo are only considered 1 entree. In contrary, the input data
 (metadata and gradient data) would be conditioned to the molecule number from each cc, but if this were not the better way to do the scaling, it will be changed in future versions.
+Update (1.3.): added functions and updated the result files to include molecular descriptors to both training the model and getting clearer results.
 """
 
 #IMPORT MODULES
+import os
 import numpy as np
 import pandas as pd
 
@@ -28,12 +30,55 @@ from lightning import pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
 #DEFINE FUNCTIONS
+def add_moldescs (df, moldesc_path):
+    """
+        This function adds molecular descriptors to the processed and split datasets.
+        All the molecules whose monoisotopic mass and xlogp are missing will be dropped.
+        Also, this columns will be added next to "formula" column, this is for to commit less changes
+        into next functions
+    """
+    moldesc_df = pd.read_csv(moldesc_path, sep = "\t")
+    nona_moldesc_df = moldesc_df.dropna()
+    temp_df = pd.merge (df, nona_moldesc_df, left_on = "inchi.std", right_on="inchi", how="left")
+    temp_df = temp_df.drop(columns=["inchi"])
+    final_df = temp_df.dropna(subset=["mono_iso_mass", "xlogp"])
+
+    # Cut and Paste
+    position = final_df.columns.get_loc("formula")
+    temp_monoisomass_serie = final_df.pop ("mono_iso_mass")
+    temp_xlogp_serie = final_df.pop ("xlogp")
+    final_df.insert(position + 1, "mono_iso_mass", temp_monoisomass_serie)
+    final_df.insert(position + 2, "xlogp", temp_xlogp_serie)
+    return final_df
+
+def get_scaled_moldescs_train (train_df):
+    """
+        This function scales the input train dataframe's molecular descriptors columns.
+        For now only 2 are being used: isotopic molecular mass and xlogp.
+    """
+    moldesc_scaler = StandardScaler()
+    input_data = train_df.loc [:, "mono_iso_mass":"xlogp"]
+    moldesc_scaler.fit (input_data)
+    columns = ["mono_iso_mass", "xlogp"]
+    final_df = train_df.copy ()
+    final_df [columns] = moldesc_scaler.transform(final_df[columns])
+    return train_df, moldesc_scaler
+
+def get_scaled_moldesc_testval (df, train_moldesc_scaler):
+    """
+        Uses the moldesc_scaler gotten from train dataset to scale molecular descriptors
+        mainly for val and test datasets.
+    """
+    final_df = df.copy()
+    columns = ["mono_iso_mass", "xlogp"]
+    final_df [columns] = train_moldesc_scaler.transform(final_df[columns])
+    return final_df
+
 def get_scaled_input_train_data (train_df):
     """
     Input: The train set used for training a model.
     Output: the scaled train set and the Scaler
     """
-
     temp_list = []
     train_input_scaler = StandardScaler ()
     index_array = np.unique (train_df["dir_id"])
@@ -51,7 +96,7 @@ def get_scaled_input_train_data (train_df):
 
 def get_scaled_datasets (df, train_input_scaler):
     """
-    Used for scaling the input df using the train Scaler.
+    Used for scaling the input (metadata and gradient data) df using the train Scaler.
     In this context, this is used to get test and val data using train_input_scaler.
     """
     position = df.columns.get_loc("column.length")
@@ -59,15 +104,18 @@ def get_scaled_datasets (df, train_input_scaler):
     df [columns_used] = train_input_scaler.transform(df[columns_used])
     return df
 
-def get_train_dataloader (train_df):
+def get_train_dataloader (train_df, using_moldescs=False):
     """
     Input: The df containing the training data.
     Output: The train loader, the train_scaler and the cc_shape, which is the size of the metadata and the gradient data, used as input for training MPNN.
     Note that the shuffle Boolean has been set to True.
+    Update: A new Boolean using_moldescs is implemented, and set to False by default. If True, it means that molecular descriptors will be used.
     """
     inchis = train_df.loc [:, "inchi.std"].values
     rts = train_df.loc [:, ["rt_s"]].values
-    cc_columns = train_df.loc[:,"column.usp.code_L1":].columns
+    cc_columns = train_df.loc[:,"column.usp.code_L1":].columns.tolist ()
+    if using_moldescs:
+        cc_columns = cc_columns + ["mono_iso_mass", "xlogp"]
     temp_column_list = []
     for column in cc_columns:
         temp_list = train_df.loc [:, [column]].values
@@ -85,15 +133,18 @@ def get_train_dataloader (train_df):
     train_loader = data.build_dataloader(train_dset, num_workers=5, shuffle=True, seed=42)
     return train_loader, train_scaler, len (temp_column_list)  #The last result is the cc_shape
 
-def get_test_val_loader (df, train_scaler):
+def get_test_val_loader (df, train_scaler, using_moldescs=False):
     """
     Input: the test or the val df and the scaler used for scaling training df.
     Output: the test or the val DataLoader obtained using the train_scaler, which can be obtained using the previous function.
     Note that here, the shuffle Boolean has been set to False.
+    Update: A new Boolean using_moldescs is implemented, and set to False by default. If True, it means that molecular descriptors will be used.
     """
     inchis = df.loc[:, "inchi.std"].values
     rts = df.loc[:, ["rt_s"]].values
-    cc_columns = df.loc[:, "column.usp.code_L1":].columns
+    cc_columns = df.loc[:, "column.usp.code_L1":].columns.tolist ()
+    if using_moldescs:
+        cc_columns = cc_columns + ["mono_iso_mass", "xlogp"]
     temp_column_list = []
     for column in cc_columns:
         temp_list = df.loc[:, [column]].values
@@ -112,6 +163,9 @@ def get_test_val_loader (df, train_scaler):
     return data_loader
 
 def complete_cc_configure_train_model (scaler, train_loader, val_loader,param_dict, cc_shape, results_path, save_model=True):
+    """
+        This is the main function for configurating and training a chemprop MPNN.
+    """
     mp = nn.BondMessagePassing(
         d_h=param_dict["mp_hidden_dim"],
         depth=param_dict["mp_depth"],
@@ -167,12 +221,16 @@ def complete_cc_configure_train_model (scaler, train_loader, val_loader,param_di
         torch.save(mpnn.state_dict(), save_model_path)
     return mpnn, trainer
 
-def get_res_table (test_df, pred_array, save_dir, save_results=True):
+def get_res_table (test_df, pred_array, save_dir, save_results=True, using_moldescs=False):
     """
         Update: A new Boolean save_results has been added as a parameter. This is mainly added for the update of model_per_repo/main.py to get the result table.
         As it has been set to True when not defined, other scripts that used this function do not have to be modified.
     """
-    temp_df = test_df [["dir_id","molecule_id", "inchi.std", "rt_s", "max_rt", "mean_rt"]]
+    if using_moldescs:
+        temp_df =  test_df [["dir_id","molecule_id", "mono_iso_mass", "xlogp", "inchi.std", "rt_s", "max_rt", "mean_rt"]]
+    else:
+        temp_df = test_df [["dir_id","molecule_id", "inchi.std", "rt_s", "max_rt", "mean_rt"]]
+
     temp_df ["pred_rt"] = pred_array
     temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt_s"])
     temp_df ["rel_error_max"] = temp_df ["diff"]*100 / temp_df["max_rt"]

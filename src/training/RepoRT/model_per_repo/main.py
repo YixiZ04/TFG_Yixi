@@ -2,7 +2,7 @@
 Name: RepoRT_MPNN_each_repo.py
 Author: Yixi Zhang
 Date: March 2026/April 2026
-Version: 1.1
+Version: 1.2.
 Usege: Builds individuals MPNN using data from every RepoRT's subsets (0001, 0002...
 In total, there will be 3 main result files saved in the result directory (should be defined):
     1. metric.txt. This file contains the aggregated metrics (MAE, RMSE, %errors) calculated from Results.tsv. Might not be as interesting as the last result file,
@@ -13,6 +13,7 @@ In total, there will be 3 main result files saved in the result directory (shoul
 Update: This will use the total processed RepoRT dataset for making sure that the repos used in this Script corresponds with the repos remaining after processing.
 With this update, very similar Scripts will be removed and the results will be comparable to those obtained with models trained using all data.
 The result files are the exact same as the result files for other cases (random_split e.g.).The only difference being on how those results are obtained.
+Update (1.2): added option to train models with moldescs
 """
 
 # IMPORT THE FUNCTIONS NEEDED
@@ -25,24 +26,28 @@ from pathlib import Path
 from chemprop import  nn
 from lightning import pytorch as pl
 from src.training.functions.basic_model_functions import get_dataloaders, configure_and_train_mpnn
-from src.training.functions.splitted_sets_functions import get_res_table, metrics_from_dataframe,write_parameters_file, write_metrics_per_cc, write_metric_txt
+from src.training.functions.moldesc_model_functions import get_dataloaders_with_moldesc, configure_and_train_mpnn_moldesc
+from src.training.functions.splitted_sets_functions import *
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
 input_path = Path("./data/processed_RepoRT/")           #This is the path to the input data. If not existing, will be created,
-dataset_type = "with_SMRT"                                   # Or with_smrt.
-path2res = os.path.join (".", "logs", "RepoRT", dataset_type, "model_per_repo", "01_07_04_2026/")      # Change dirname/ to customize the saving path
+dataset_type = "no_SMRT"                                                                         #Or with_SMRT, depends on the type of input dataset to use.
+using_moldescs = False                                                                           # Set to True if want to use molecular descriptors for the model
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, "model_per_repo", "dirname/") #Change "dirname" for any name you want.
+path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 param_dict = {
-    "mp_hidden_dim": 451,                             # Hidden dimension of the message passing (MP) part
-    "mp_depth": 4,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 1493,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 4,                                  # Number of layers for the ffn.
+    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
+    "mp_depth": 3,                                    # Depth/Number of Layers of the MP
+    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers": 1,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
+    "dropout_rate": 0,                                # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
@@ -89,18 +94,24 @@ if __name__ == "__main__":
         # temp_df = temp_df.sample (50)         #Run this to have a quick test of the Script's usage
 
         # Build a model for each repo.
-        inchis_array = temp_df.loc [:, "inchi.std"].values
-        rts = temp_df.loc [:, ["rt_s"]].values
-        scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=inchis_array,
-                                                                                      target_array=rts)
-        mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
+        if using_moldescs:
+            temp_df = add_moldescs(temp_df, path2moldesc)
+            targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders_with_moldesc(temp_df,
+                                                                                                       dataset="RepoRT")
+            mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
+        else:
+            inchis_array = temp_df.loc[:, "inchi.std"].values
+            rts = temp_df.loc[:, ["rt_s"]].values
+            scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=inchis_array,
+                                                                                          target_array=rts)
+            mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
 
         test_pred = trainer.predict(mpnn, test_loader)
         test_pred = np.concatenate(test_pred, axis=0)
         # GETTING RESULTS
         print (f"Getting results for the repo {dir_id}")
         temp_test_df = temp_df.iloc [test_indices[0]]
-        temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False)
+        temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False, using_moldescs=using_moldescs)
         results_array.append(temp_res_table)
     print (f"Writting the final result files in {path2res}...")
     res_table = pd.concat (results_array, ignore_index=True)
