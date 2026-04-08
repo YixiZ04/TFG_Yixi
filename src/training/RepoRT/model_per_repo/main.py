@@ -84,9 +84,9 @@ if __name__ == "__main__":
     #Training process.
     dir_id_array = np.unique (df["dir_id"])
     results_array = []          # This array will be used store dfs to build a large df for results, where all the metrics will be calculated.
-    for dir_id in dir_id_array[:2]:
+    for dir_id in dir_id_array:
         temp_df = df[df["dir_id"] == dir_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
-        temp_df = temp_df.sample (50)         #Run this to have a quick test of the Script's usage
+        # temp_df = temp_df.sample (50)         #Run this to have a quick test of the Script's usage
 
         # Build a model for each repo.
         inchis_array = temp_df.loc [:, "inchi.std"].values
