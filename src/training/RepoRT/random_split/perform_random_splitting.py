@@ -23,10 +23,6 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
 
-# @todo Decide whether to delete the __main__ block below or update it to pass the
-# required arguments explicitly. At line 71 this function is called as
-# split_train_val_test() with no arguments, but its signature requires
-# input_path, output_dir, drop_smrt, and apply_upthreshold.
 def split_train_val_test (input_path, output_dir, drop_smrt, apply_upthreshold):
     """
     Uses the scaled_complete_df to perform train_test_split.
@@ -72,11 +68,3 @@ def split_train_val_test (input_path, output_dir, drop_smrt, apply_upthreshold):
     val_set.to_csv (val_filename, sep = "\t", index = False)
     print (f"Successfully split the processed datafile randomly and the datafiles will be saved in {output_dir}")
 
-if __name__ == "__main__":
-    split_train_val_test()
-    train_file = output_dir + "train_data.tsv"
-    val_file = output_dir + "val_data.tsv"
-    test_file = output_dir + "test_data.tsv"
-    a = pd.read_csv (train_file, sep = "\t")
-    b = pd.read_csv (val_file, sep = "\t")
-    c = pd.read_csv (test_file, sep = "\t")
