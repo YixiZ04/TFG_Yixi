@@ -62,7 +62,7 @@ def get_scaled_moldescs_train (train_df):
     columns = ["mono_iso_mass", "xlogp"]
     final_df = train_df.copy ()
     final_df [columns] = moldesc_scaler.transform(final_df[columns])
-    return train_df, moldesc_scaler
+    return final_df, moldesc_scaler
 
 def get_scaled_moldesc_testval (df, train_moldesc_scaler):
     """
