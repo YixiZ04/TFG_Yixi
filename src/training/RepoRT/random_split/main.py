@@ -116,8 +116,8 @@ if __name__ == "__main__":
 
     print ("Getting the DataLoaders...")
     train_loader, scaler, cc_shape = get_train_dataloader(scaled_train_df, using_moldescs=using_moldescs)
-    val_loader = get_test_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
-    test_loader = get_test_val_loader(scaled_test_df, scaler, using_moldescs=using_moldescs)
+    val_loader = get_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
+    test_loader = get_test_loader(scaled_test_df, using_moldescs=using_moldescs)
 
     print ("Building and training the model...")
     mpnn, trainer = complete_cc_configure_train_model(scaler, train_loader, val_loader, param_dict, cc_shape = cc_shape,results_path=path2res, save_model=True)
