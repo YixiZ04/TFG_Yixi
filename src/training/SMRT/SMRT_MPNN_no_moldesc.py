@@ -1,11 +1,12 @@
 """
-Name: SMRT_MPNN_regression.py
-Author: Yixi Zhang
-Date: March 2026
-Version: 1.0
-Usage: Run this file to train MPNN for SMRT dataset without molecular descriptors. All the parameters displayed in the "param_dict" are the default parameters
-from chemprop. Change values and the path to saving directory to avoid overwriting the results of previous runs if any.
-The model has Early Stopping mechanism implemented.
+    Name: SMRT_MPNN_no_moldsc.py
+    Author: Yixi Zhang
+    Date: March 2026
+    Version: 1.1
+    Usage: Run this file to train MPNN for SMRT dataset without molecular descriptors. All the parameters displayed in the "param_dict" are the default parameters
+    from chemprop. Change values and the path to saving directory to avoid overwriting the results of previous runs if any.
+    The model has Early Stopping mechanism implemented.
+    Adapted to the most recent version
 """
 
 # IMPORT THE BASIC FUNCTIONS
@@ -15,8 +16,8 @@ import os
 from lightning import pytorch as pl
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
-csv_data_file = "./data/no_extra_mol_desc/SMRT_data.csv"        #If not existing, it should be downloaded on internet. DO NOT USE FILE WITH MOL DESC
-path2res = "./logs/SMRT/no_moldesc/SMRT_results_0/"                        # Change the dirname for each trial
+csv_data_file = os.path.join(".", "data", "SMRT", "SMRT_data.csv")                            #If not existing, it should be downloaded on internet. DO NOT USE FILE WITH MOL DESC
+path2res = os.path.join(".", "logs", "SMRT", "no_moldescs", "dirname/")                       # Change the dirname for each trial
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -60,7 +61,7 @@ if __name__ == "__main__":
 
     print ("Making the result files...")
     write_parameters_file(param_dict, path2res)
-    res_table = get_res_table_SMRT(df, test_pred, test_indices)
+    res_table = get_res_table(df, test_pred, test_indices)
     res_table.to_csv (path2res + "Result_table.tsv", sep = '\t', index = False)
     mae, rmse = metrics_from_dataframe(res_table)
     write_metric_txt (mae, rmse, path2res)

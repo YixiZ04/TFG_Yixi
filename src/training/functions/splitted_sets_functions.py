@@ -112,7 +112,7 @@ def get_train_dataloader (train_df, using_moldescs=False):
     Update: A new Boolean using_moldescs is implemented, and set to False by default. If True, it means that molecular descriptors will be used.
     """
     inchis = train_df.loc [:, "inchi.std"].values
-    rts = train_df.loc [:, ["rt_s"]].values
+    rts = train_df.loc [:, ["rt"]].values
     cc_columns = train_df.loc[:,"column.usp.code_L1":].columns.tolist ()
     if using_moldescs:
         cc_columns = cc_columns + ["mono_iso_mass", "xlogp"]
@@ -141,7 +141,7 @@ def get_test_val_loader (df, train_scaler, using_moldescs=False):
     Update: A new Boolean using_moldescs is implemented, and set to False by default. If True, it means that molecular descriptors will be used.
     """
     inchis = df.loc[:, "inchi.std"].values
-    rts = df.loc[:, ["rt_s"]].values
+    rts = df.loc[:, ["rt"]].values
     cc_columns = df.loc[:, "column.usp.code_L1":].columns.tolist ()
     if using_moldescs:
         cc_columns = cc_columns + ["mono_iso_mass", "xlogp"]
@@ -227,12 +227,12 @@ def get_res_table (test_df, pred_array, save_dir, save_results=True, using_molde
         As it has been set to True when not defined, other scripts that used this function do not have to be modified.
     """
     if using_moldescs:
-        temp_df =  test_df [["dir_id","molecule_id", "mono_iso_mass", "xlogp", "inchi.std", "rt_s", "max_rt", "mean_rt"]]
+        temp_df =  test_df [["dir_id","id", "name","mono_iso_mass", "xlogp", "inchi.std", "rt", "max_rt", "mean_rt"]]
     else:
-        temp_df = test_df [["dir_id","molecule_id", "inchi.std", "rt_s", "max_rt", "mean_rt"]]
+        temp_df = test_df [["dir_id","id", "name", "inchi.std", "rt", "max_rt", "mean_rt"]]
 
     temp_df ["pred_rt"] = pred_array
-    temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt_s"])
+    temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt"])
     temp_df ["rel_error_max"] = temp_df ["diff"]*100 / temp_df["max_rt"]
     temp_df ["rel_error_mean"] = temp_df ["diff"]*100 / temp_df["mean_rt"]
     filename = save_dir + "Results.tsv"

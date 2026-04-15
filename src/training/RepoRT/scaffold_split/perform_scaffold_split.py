@@ -14,9 +14,9 @@ import os
 import pandas as pd
 import numpy as np
 from rdkit.Chem.Scaffolds import MurckoScaffold
-from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
+from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
-def ms_split (input_path, output_dir, drop_smrt, apply_upthreshold):
+def ms_split (input_path, output_dir, drop_smrt, apply_low_grad_filter):
     """
     Input: Path to processed DataFrame and Directory to save result files.
     Outputs: Saves the train/val/test dsets in .tsv format inside the saving directory.
@@ -24,8 +24,8 @@ def ms_split (input_path, output_dir, drop_smrt, apply_upthreshold):
     if not Path(input_path).exists():
         print ("The input file does not exist. Creating it...")
         get_processed_df_from_raw (drop_smrt=drop_smrt,
-                                   apply_upthreshold=apply_upthreshold,
-                                   complete=False)
+                                   down_grad_filter=apply_low_grad_filter
+                                   )
 
     print ("Reading the input file...")
     df = pd.read_csv (input_path, sep='\t')

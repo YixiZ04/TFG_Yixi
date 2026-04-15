@@ -733,7 +733,7 @@ def cc_ms_split(
     random_seed,
     processed_file,
     save_complete_ms_dir,
-    apply_upthreshold,
+    apply_low_grad_filter,
     drop_smrt,
 ):
     """
@@ -745,7 +745,7 @@ def cc_ms_split(
         ms_split(
             input_path=processed_file,
             output_dir=save_complete_ms_dir,
-            apply_upthreshold=apply_upthreshold,
+            apply_low_grad_filter= apply_low_grad_filter,
             drop_smrt=drop_smrt,
         )
 

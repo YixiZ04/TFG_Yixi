@@ -26,11 +26,16 @@ from src.training.RepoRT.random_split.perform_random_splitting import split_trai
 
 # DEFINE PARAMETERS
 
-dataset_type = "no_SMRT"                                                                         #Or with_SMRT, depends on the type of input dataset to use.
-using_moldescs = False                                                                           # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, "random_split", "dirname/") #Change "dirname" for any name you want.
+
+SOURCE_PATH = os.path.join(".", "data", "RepoRT", "processed_data/")                        # This is the source directory that contains all processed files
+dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
+filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
+using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"                              # Changes the path where to save the results files
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "random_split", "01_08_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
+
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -41,12 +46,11 @@ param_dict = {
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0,                                # Dropout rate. 0 is default.
+    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
-
 
 if __name__ == "__main__":
     pl.seed_everything(42, workers=True)
@@ -54,18 +58,22 @@ if __name__ == "__main__":
     match dataset_type:
         case "no_SMRT":     #These following Booleans are used to get the processed dataset if has not been created yet.
             drop_smrt = True
-            apply_upthreshold = False
-            processed_filename = "no_SMRT_no_ds_data.tsv" #filename for the processed .tsv file.
+            if apply_grad_down_threshold:
+                path2input = os.path.join(SOURCE_PATH, "no_SMRT_down_grad_filter/")
+            else:
+                path2input = os.path.join(SOURCE_PATH, "no_SMRT/")
         case "with_SMRT":
             drop_smrt = False
-            apply_upthreshold = True
-            processed_filename = "with_SMRT_ds_data.tsv"
+            if apply_grad_down_threshold:
+                path2input = os.path.join(SOURCE_PATH, "with_SMRT_down_grad_filter/")
+            else:
+                path2input = os.path.join(SOURCE_PATH, "with_SMRT/")
         case _:
             raise NameError (f"Check the dataset_type: {dataset_type}.")
 
     # Define the processed file according to the dataset type given.
-    input_file = os.path.join (".", "data", "processed_RepoRT", processed_filename)
-    split_path = os.path.join (".", "data", "processed_RepoRT", dataset_type, "random_split_data/")
+    input_file = os.path.join(path2input, "complete_processed_data.tsv")
+    split_path = os.path.join(path2input, "random_split/")
     train_file = Path (split_path + "train_data.tsv")
     test_file = Path (split_path + "test_data.tsv")
     val_file = Path (split_path + "val_data.tsv")
@@ -78,12 +86,12 @@ if __name__ == "__main__":
         split_train_val_test(input_path= input_file, #Depending on the dataset that we want to evaluate, this function automatically creates the files needed.
                              output_dir=split_path,
                              drop_smrt=drop_smrt,
-                             apply_upthreshold=apply_upthreshold)
+                             apply_low_grad_filter=apply_grad_down_threshold)
 
     print ("Reading the input files...")
-    train_df = pd.read_csv(train_file, sep='\t')
-    test_df = pd.read_csv(test_file, sep='\t')
-    val_df = pd.read_csv(val_file, sep='\t')
+    train_df = pd.read_csv(train_file, sep='\t').sample(400)
+    test_df = pd.read_csv(test_file, sep='\t').sample(50)
+    val_df = pd.read_csv(val_file, sep='\t').sample(50)
 
     print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)

@@ -21,9 +21,9 @@ import numpy as np
 import os
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
+from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
-def split_train_val_test (input_path, output_dir, drop_smrt, apply_upthreshold):
+def split_train_val_test (input_path, output_dir, drop_smrt, apply_low_grad_filter):
     """
     Uses the scaled_complete_df to perform train_test_split.
     Random_state set to 42 for consistency.
@@ -34,8 +34,8 @@ def split_train_val_test (input_path, output_dir, drop_smrt, apply_upthreshold):
     else:
         print ("Getting the processed datafile...")
         get_processed_df_from_raw(drop_smrt=drop_smrt,
-                                  apply_upthreshold=apply_upthreshold,
-                                  complete=False)
+                                  down_grad_filter=apply_low_grad_filter,
+                                  )
     df = pd.read_csv(input_path, sep = "\t")
 
     print ("Checking the output dir...")

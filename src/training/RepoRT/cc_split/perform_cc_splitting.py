@@ -14,14 +14,14 @@ import pandas as pd
 import numpy as np
 import os
 from pathlib import Path
-from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
+from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
 # DEFINE THE FUNCTION
-def cc_split (input_path, output_dir, drop_smrt, apply_upthreshold):
+def cc_split (input_path, output_dir, drop_smrt, apply_low_grad_filter):
     """
-    Splitting the processed datafile (input_path) given by chromatography conditions.
-    The train, test and val tsv files will be saved in the output_dir
-    If the processed RepoRT input file does not exist, it will be created using drop_smrt (Boolean) and apply_upthreshold (Boolean).
+        Splitting the processed datafile (input_path) given by chromatography conditions.
+        The train, test and val tsv files will be saved in the output_dir
+        If the processed RepoRT input file does not exist, it will be created using drop_smrt (Boolean) and apply_low_grad_filter (Boolean).
     """
     print ("Checking the input file...")
     file = Path(input_path)
@@ -30,8 +30,8 @@ def cc_split (input_path, output_dir, drop_smrt, apply_upthreshold):
     else:
         print ("The input file does not exist, creating it...")
         get_processed_df_from_raw (drop_smrt=drop_smrt,
-                                   apply_upthreshold=apply_upthreshold,
-                                   complete=False)
+                                   down_grad_filter=apply_low_grad_filter,
+                                   )
 
     print ("Getting the input DataFrame...")
     df = pd.read_csv (input_path, sep = "\t",)
