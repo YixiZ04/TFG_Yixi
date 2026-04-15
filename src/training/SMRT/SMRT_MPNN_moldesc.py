@@ -1,15 +1,16 @@
 """
-Name: SMRT_MPNN_moldesc.py
-Author: Yixi Zhang
-Date: March 2026
-Version: 1.1.
-Usage: Train MPNN with SMRT dataset with molecular descriptors (mono_iso_mass and xlogp). Change the param_dict and saving dir path to avoid result overwriting.
-It builds 4 output files in the directory defined for output:
-    1. metrics.txt : A txt file containing the value og 2 metrics used for evaluating the model: MAE (s) and RMSE (s)
-    2. model.pt: A .pt for saving the pytorch model.
-    3. parameters.txt: A .txt file containing all parameters used for the training.
-    4. Result_table.tsv: A .tsv file containing the results: pred_rt, real_rt, difference...
-Update: Now if the input file does not exist, it will be built.
+    Name: SMRT_MPNN_moldesc.py
+    Author: Yixi Zhang
+    Date: March 2026
+    Version: 1.1.
+    Usage: Train MPNN with SMRT dataset with molecular descriptors (mono_iso_mass and xlogp). Change the param_dict and saving dir path to avoid result overwriting.
+    It builds 4 output files in the directory defined for output:
+        1. metrics.txt : A txt file containing the value og 2 metrics used for evaluating the model: MAE (s) and RMSE (s)
+        2. model.pt: A .pt for saving the pytorch model.
+        3. parameters.txt: A .txt file containing all parameters used for the training.
+        4. Result_table.tsv: A .tsv file containing the results: pred_rt, real_rt, difference...
+    Update: Now if the input file does not exist, it will be built.
+    Adapted to the most recent version
 """
 
 # IMPORT MODULES
@@ -25,8 +26,8 @@ from src.get_molecular_descriptors.get_molecular_descriptors import add_columns2
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
 
-input_file = Path("./data/with_extra_mol_desc/SMRT_extra_mol_descs.tsv")        # Be sure its existence.
-path2res = "./logs/SMRT/moldesc/SMRT_moldesc_results_0/"                        # Change the dirname for each trial
+input_file = Path(os.path.join(".", "data", "SMRT", "SMRT_data_moldesc.tsv"))           # Be sure its existence.
+path2res = os.path.join(".", "logs", "SMRT","moldesc", "dirname/")              # Change the dirname for each trial
 param_dict = {
     "mp_hidden_dim": 300,                                                       # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                                              # Depth/Number of Layers of the MP

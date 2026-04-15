@@ -28,15 +28,19 @@ from lightning import pytorch as pl
 from src.training.functions.basic_model_functions import get_dataloaders, configure_and_train_mpnn
 from src.training.functions.moldesc_model_functions import get_dataloaders_with_moldesc, configure_and_train_mpnn_moldesc
 from src.training.functions.splitted_sets_functions import *
-from src.process_RepoRT_data.data_processing import get_processed_df_from_raw
+from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
-input_path = Path("./data/processed_RepoRT/")           #This is the path to the input data. If not existing, will be created,
-dataset_type = "no_SMRT"                                                                         #Or with_SMRT, depends on the type of input dataset to use.
-using_moldescs = False                                                                           # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, "model_per_repo", "dirname/") #Change "dirname" for any name you want.
+SOURCE_PATH = os.path.join(".", "data", "RepoRT", "processed_data/")                        # This is the source directory that contains all processed files
+dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
+filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
+using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"                              # Changes the path where to save the results files
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "scaffold_split", "01_08_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
+
+
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -47,11 +51,12 @@ param_dict = {
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0,                                # Dropout rate. 0 is default.
+    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
+
 
 
 # RUNNING THE SCRIPT
@@ -60,25 +65,29 @@ if __name__ == "__main__":
 
     # Assertion for the data type. Match is used here for better generalization if in the future more dataset types will be evaluated.
     match dataset_type:
-        case "no_SMRT":     #These following Booleans are used to get the processed dataset if has not been created yet.
+        case "no_SMRT":  # These following Booleans are used to get the processed dataset if has not been created yet.
             drop_smrt = True
-            apply_upthreshold = False
-            processed_filename = "no_SMRT_no_ds_data.tsv" #filename for the processed .tsv file.
+            if apply_grad_down_threshold:
+                path2input = os.path.join(SOURCE_PATH, "no_SMRT_down_grad_filter/")
+            else:
+                path2input = os.path.join(SOURCE_PATH, "no_SMRT/")
         case "with_SMRT":
             drop_smrt = False
-            apply_upthreshold = True
-            processed_filename = "with_SMRT_ds_data.tsv"
+            if apply_grad_down_threshold:
+                path2input = os.path.join(SOURCE_PATH, "with_SMRT_down_grad_filter/")
+            else:
+                path2input = os.path.join(SOURCE_PATH, "with_SMRT/")
         case _:
-            raise NameError (f"Check the dataset_type: {dataset_type}.")
+            raise NameError(f"Check the dataset_type: {dataset_type}.")
 
-    input_file = os.path.join(input_path, processed_filename)
+    input_file = os.path.join (path2input, "complete_processed_data.tsv")
 
     # Checking fot the input file existence
 
     if not Path(input_file).exists():
         print (f"Making the input file: {input_file}...")
         get_processed_df_from_raw(drop_smrt=drop_smrt,
-                                  apply_upthreshold=apply_upthreshold,)
+                                  down_grad_filter=apply_grad_down_threshold,)
     print ("Getting the input df...")
     df = pd.read_csv (input_file, sep="\t")
 
@@ -101,7 +110,7 @@ if __name__ == "__main__":
             mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
         else:
             inchis_array = temp_df.loc[:, "inchi.std"].values
-            rts = temp_df.loc[:, ["rt_s"]].values
+            rts = temp_df.loc[:, ["rt"]].values
             scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=inchis_array,
                                                                                           target_array=rts)
             mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)

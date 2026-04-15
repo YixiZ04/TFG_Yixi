@@ -2,7 +2,7 @@
 Name: training/RepoRT/cc_scaffold_split/main.py
 Author: Yixi Zhang.
 Date: March 2026
-Version: 1.4.
+Version: 1.3.
 Usage: Run the file to train and configure a MPNN using chemprop and processed data randomly split from RepoRT.
 If the input datafiles do not exist, they will be built.
 Update (1.1.): adapted to splitted_sets_functions.py version 1.1.
@@ -12,7 +12,7 @@ Update (1.3.): added an option to evaluate different datasets, for now, two type
     2. All RepoRT but downsampled those Repositories with >5000 molecuels (with_SMRT).
     If in the future, more datasets shuold be evaluated, this Script is easily extendable.
     (This could also be considered as adapting the version 1.2. of data_processing.py)
-NOTE: Change dirname in line 32 to customize the saving directory name.
+NOTE: Change dirname in line 28 to customize the saving directory name.
 Update (1.4); added the option to train model with molecular descriptors.
 """
 
@@ -25,12 +25,16 @@ from src.training.functions.splitted_sets_functions import *
 from src.training.RepoRT.cc_scaffold_split.perform_cc_scaffold_split import cc_ms_split
 
 # DEFINE PARAMETERS
-
-dataset_type = "no_SMRT"                                                                         #Or with_SMRT, depends on the type of input dataset to use.
-using_moldescs = False                                                                           # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, "cc_scaffold_split", "dirname/") #Change "dirname" for any name you want.
+SOURCE_PATH = os.path.join(".", "data", "RepoRT", "processed_data/")                        # This is the source directory that contains all processed files
+dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+apply_grad_down_threshold = True                                                           # Set to True if want to use the filtered by grad_down_threshold
+filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
+using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"                              # Changes the path where to save the results files
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_scaffold_split", "01_08_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
+
+
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -41,35 +45,37 @@ param_dict = {
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0,                                # Dropout rate. 0 is default.
+    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
 
-
 if __name__ == "__main__":
     pl.seed_everything(42, workers=True)
     # Assertion for the data type. Match is used here for better generalization if in the future more dataset types will be evaluated.
     match dataset_type:
-        case "no_SMRT":  # These following Booleans are used to get the processed dataset if has not been created yet.
+        case "no_SMRT":     #These following Booleans are used to get the processed dataset if has not been created yet.
             drop_smrt = True
-            apply_upthreshold = False
-            processed_filename = "no_SMRT_no_ds_data.tsv"  # filename for the processed .tsv file.
-            random_seed = 51
+            if apply_grad_down_threshold:
+                path2input = os.path.join(SOURCE_PATH, "no_SMRT_down_grad_filter/")
+            else:
+                path2input = os.path.join(SOURCE_PATH, "no_SMRT/")
         case "with_SMRT":
             drop_smrt = False
-            apply_upthreshold = True
-            processed_filename = "with_SMRT_ds_data.tsv"
-            random_seed = 51
+            if apply_grad_down_threshold:
+                path2input = os.path.join(SOURCE_PATH, "with_SMRT_down_grad_filter/")
+            else:
+                path2input = os.path.join(SOURCE_PATH, "with_SMRT/")
         case _:
-            raise NameError(f"Check the dataset_type: {dataset_type}.")
+            raise NameError (f"Check the dataset_type: {dataset_type}.")
 
+    random_seed = 51
     # Define the processed file according to the dataset type given.
-    input_file = os.path.join (".", "data", "processed_RepoRT", processed_filename)
-    ms_complete_save_dir = os.path.join (".", "data", "processed_RepoRT", dataset_type, "scaffold_split_data/")
+    input_file = os.path.join (path2input, "complete_processed_data.tsv")
+    ms_complete_save_dir = os.path.join (path2input, "ms_split/")
     ms_complete_file = os.path.join (ms_complete_save_dir,"ms_complete_data.tsv")
-    split_path = os.path.join (".", "data", "processed_RepoRT", dataset_type, "cc_scaffold_split_data/")
+    split_path = os.path.join (path2input, "cc_scaffold_split/")
     train_file = Path (split_path + "train_data.tsv")
     test_file = Path (split_path + "test_data.tsv")
     val_file = Path (split_path + "val_data.tsv")
@@ -93,12 +99,12 @@ if __name__ == "__main__":
                      processed_file=input_file,
                      save_complete_ms_dir=ms_complete_save_dir,
                      drop_smrt=drop_smrt,
-                     apply_upthreshold=apply_upthreshold)
+                     apply_low_grad_filter=apply_grad_down_threshold)
 
     print ("Reading the input files...")
-    train_df = pd.read_csv(train_file, sep='\t')
-    test_df = pd.read_csv(test_file, sep='\t')
-    val_df = pd.read_csv(val_file, sep='\t')
+    train_df = pd.read_csv(train_file, sep='\t').sample(400)
+    test_df = pd.read_csv(test_file, sep='\t').sample(50)
+    val_df = pd.read_csv(val_file, sep='\t').sample(50)
 
     if (
         train_df.empty
@@ -114,10 +120,10 @@ if __name__ == "__main__":
                      processed_file=input_file,
                      save_complete_ms_dir=ms_complete_save_dir,
                      drop_smrt=drop_smrt,
-                     apply_upthreshold=apply_upthreshold)
-        train_df = pd.read_csv(train_file, sep='\t')
-        test_df = pd.read_csv(test_file, sep='\t')
-        val_df = pd.read_csv(val_file, sep='\t')
+                     apply_low_grad_filter=apply_grad_down_threshold)
+        train_df = pd.read_csv(train_file, sep='\t').sample(400)
+        test_df = pd.read_csv(test_file, sep='\t').sample(50)
+        val_df = pd.read_csv(val_file, sep='\t').sample(50)
 
     print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)

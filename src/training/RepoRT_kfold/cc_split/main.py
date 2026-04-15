@@ -16,12 +16,16 @@ OBJECTIVE_DICT = {f"k-fold{fold_index}":[] for fold_index in range(1, K+1)}     
 
 
 # DEFINE PARAMETERS
-
-dataset_type = "no_SMRT" #Or with_SMRT, depends on the type of input dataset to use.
-using_moldescs = False     # Set to True if want to use molecular descriptors for the model
+SOURCE_PATH = os.path.join(".", "data", "RepoRT", "processed_data/")                        # This is the source directory that contains all processed files
+dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
+filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
+using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_kfold_moldesc" if using_moldescs else "RepoRT_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, "cc_split", "dirname/")
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "01_08_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
+
+
 param_dict = {
     "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 3,                                    # Depth/Number of Layers of the MP
@@ -38,23 +42,30 @@ param_dict = {
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
 
+
+
+# RUNNING THE SCRIPT
 if __name__ == "__main__":
     pl.seed_everything(42, workers=True)
+
     # Assertion for the data type. Match is used here for better generalization if in the future more dataset types will be evaluated.
     match dataset_type:
-        case "no_SMRT":     #These following Booleans are used to get the processed dataset if has not been created yet.
+        case "no_SMRT":  # These following Booleans are used to get the processed dataset if has not been created yet.
             drop_smrt = True
-            apply_upthreshold = False
-            processed_filename = "no_SMRT_no_ds_data.tsv" #filename for the processed .tsv file.
+            if apply_grad_down_threshold:
+                path2input = os.path.join(SOURCE_PATH, "no_SMRT_down_grad_filter/")
+            else:
+                path2input = os.path.join(SOURCE_PATH, "no_SMRT/")
         case "with_SMRT":
             drop_smrt = False
-            apply_upthreshold = True
-            processed_filename = "with_SMRT_ds_data.tsv"
+            if apply_grad_down_threshold:
+                path2input = os.path.join(SOURCE_PATH, "with_SMRT_down_grad_filter/")
+            else:
+                path2input = os.path.join(SOURCE_PATH, "with_SMRT/")
         case _:
-            raise NameError (f"Check the dataset_type: {dataset_type}.")
+            raise NameError(f"Check the dataset_type: {dataset_type}.")
 
-    # Define the processed file according to the dataset type given.
-    input_file = os.path.join (".", "data", "processed_RepoRT", processed_filename)
+    input_file = os.path.join (path2input, "complete_processed_data.tsv")
     input_df = pd.read_csv(input_file, sep="\t")
 
     print("Input data are successfully read. Making the output directory...")
