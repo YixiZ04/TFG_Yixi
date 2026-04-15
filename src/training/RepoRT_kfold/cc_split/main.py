@@ -5,6 +5,7 @@ from pathlib import Path
 from lightning import pytorch as pl
 from src.training.functions.splitted_sets_functions import *
 from src.training.functions.k_fold_functions import split_dataset_into_k_folds
+from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
 
 #K-Fold parameters
@@ -66,6 +67,9 @@ if __name__ == "__main__":
             raise NameError(f"Check the dataset_type: {dataset_type}.")
 
     input_file = os.path.join (path2input, "complete_processed_data.tsv")
+    if not Path(input_file).exists():
+        get_processed_df_from_raw(drop_smrt=drop_smrt,
+                                  down_grad_filter=apply_grad_down_threshold)
     input_df = pd.read_csv(input_file, sep="\t")
 
     print("Input data are successfully read. Making the output directory...")

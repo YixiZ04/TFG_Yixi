@@ -133,7 +133,7 @@ def get_train_dataloader (train_df, using_moldescs=False):
     train_loader = data.build_dataloader(train_dset, num_workers=5, shuffle=True, seed=42)
     return train_loader, train_scaler, len (temp_column_list)  #The last result is the cc_shape
 
-def get_test_val_loader (df, train_scaler, using_moldescs=False):
+def get_val_loader (df, train_scaler, using_moldescs=False):
     """
     Input: the test or the val df and the scaler used for scaling training df.
     Output: the test or the val DataLoader obtained using the train_scaler, which can be obtained using the previous function.
@@ -159,6 +159,30 @@ def get_test_val_loader (df, train_scaler, using_moldescs=False):
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
     dset = data.MoleculeDataset(all_data[0], featurizer)
     dset.normalize_targets(train_scaler)            #Here this is normalized with the train_scaler.
+    data_loader = data.build_dataloader(dset, num_workers=5, shuffle=False) #Dependiong on if the val or test given.
+    return data_loader
+
+def get_test_loader(test_df, using_moldescs=False):
+    """
+        NO SCALING ON TEST LOADER AS OUTPUT TRANSFORM HAS BEEN IMPLEMENTED IN THE CONFIGURATION
+    """
+    inchis = test_df.loc[:, "inchi.std"].values
+    rts = test_df.loc[:, ["rt"]].values
+    cc_columns = test_df.loc[:, "column.usp.code_L1":].columns.tolist()
+    if using_moldescs:
+        cc_columns = cc_columns + ["mono_iso_mass", "xlogp"]
+    temp_column_list = []
+    for column in cc_columns:
+        temp_list = test_df.loc[:, [column]].values
+        temp_column_list.append(temp_list)
+    cc = np.concatenate(
+        temp_column_list, axis=1
+    )
+    mols = [MolFromInchi(inchi, sanitize=False) for inchi in inchis]
+    # BUILD DATAPOINTS
+    all_data = [[data.MoleculeDatapoint(mol, rt, x_d=X_d) for mol, rt, X_d in zip(mols, rts, cc)]]
+    featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
+    dset = data.MoleculeDataset(all_data[0], featurizer)
     data_loader = data.build_dataloader(dset, num_workers=5, shuffle=False) #Dependiong on if the val or test given.
     return data_loader
 

@@ -5,7 +5,7 @@ from pathlib import Path
 from lightning import pytorch as pl
 from src.training.functions.splitted_sets_functions import *
 from src.training.functions.k_fold_functions import split_dataset_into_k_folds
-
+from src.training.RepoRT.scaffold_split.perform_scaffold_split import ms_split
 #K-Fold parameters
 
 K = 10                                                                           # By default, 5 folds will be made.
@@ -65,6 +65,9 @@ if __name__ == "__main__":
             raise NameError(f"Check the dataset_type: {dataset_type}.")
 
     input_file = os.path.join (path2input, "ms_split", "ms_complete_data.tsv")
+    if not Path(input_file).exists ():
+        ms_split(drop_smrt=drop_smrt,
+                 apply_low_grad_filter=apply_grad_down_threshold)
     input_df = pd.read_csv(input_file, sep="\t")
 
     print("Input data are successfully read. Making the output directory...")
@@ -103,8 +106,8 @@ if __name__ == "__main__":
 
         print ("Getting the DataLoaders...")
         train_loader, scaler, cc_shape = get_train_dataloader(scaled_train_df, using_moldescs=using_moldescs)
-        val_loader = get_test_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
-        test_loader = get_test_val_loader(scaled_test_df, scaler, using_moldescs=using_moldescs)
+        val_loader = get_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
+        test_loader = get_test_loader(scaled_test_df,  using_moldescs=using_moldescs)
 
         print ("Building and training the model...")
         mpnn, trainer = complete_cc_configure_train_model(scaler, train_loader, val_loader, param_dict, cc_shape = cc_shape,results_path=res_path, save_model=True)
