@@ -89,9 +89,9 @@ if __name__ == "__main__":
                              apply_low_grad_filter=apply_grad_down_threshold)
 
     print ("Reading the input files...")
-    train_df = pd.read_csv(train_file, sep='\t').sample(400)
-    test_df = pd.read_csv(test_file, sep='\t').sample(50)
-    val_df = pd.read_csv(val_file, sep='\t').sample(50)
+    train_df = pd.read_csv(train_file, sep='\t')
+    test_df = pd.read_csv(test_file, sep='\t')
+    val_df = pd.read_csv(val_file, sep='\t')
 
     print ("Input data are successfully read. Making the output directory...")
     os.makedirs (path2res, exist_ok=True)
