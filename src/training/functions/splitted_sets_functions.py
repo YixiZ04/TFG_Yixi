@@ -251,9 +251,9 @@ def get_res_table (test_df, pred_array, save_dir, save_results=True, using_molde
         As it has been set to True when not defined, other scripts that used this function do not have to be modified.
     """
     if using_moldescs:
-        temp_df =  test_df [["dir_id","id", "name","mono_iso_mass", "xlogp", "inchi.std", "rt", "max_rt", "mean_rt"]]
+        temp_df =  test_df [["dir_id","molecule_id", "name","mono_iso_mass", "xlogp", "inchi.std", "rt", "max_rt", "mean_rt"]]
     else:
-        temp_df = test_df [["dir_id","id", "name", "inchi.std", "rt", "max_rt", "mean_rt"]]
+        temp_df = test_df [["dir_id","molecule_id", "name", "inchi.std", "rt", "max_rt", "mean_rt"]]
 
     temp_df ["pred_rt"] = pred_array
     temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt"])
