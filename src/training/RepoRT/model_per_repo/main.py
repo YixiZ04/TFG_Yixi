@@ -31,21 +31,22 @@ from src.training.functions.splitted_sets_functions import *
 from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
-SOURCE_PATH = os.path.join(".", "data", "RepoRT", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
+dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
 apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "scaffold_split", "01_08_04_2026/") #Change "dirname" for any name you want.
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_17_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 
 
+
 param_dict = {
-    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
-    "mp_depth": 3,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 1,                                  # Number of layers for the ffn.
+    "mp_hidden_dim": 451,                             # Hidden dimension of the message passing (MP) part
+    "mp_depth": 4,                                    # Depth/Number of Layers of the MP
+    "ffn_hidden_dim": 1493,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers": 4,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
@@ -56,6 +57,7 @@ param_dict = {
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
+
 
 
 
@@ -122,13 +124,14 @@ if __name__ == "__main__":
         temp_test_df = temp_df.iloc [test_indices[0]]
         temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False, using_moldescs=using_moldescs)
         results_array.append(temp_res_table)
+        del mpnn, trainer
     print (f"Writting the final result files in {path2res}...")
     res_table = pd.concat (results_array, ignore_index=True)
     res_table.to_csv (path2res+ "Results.tsv", sep = "\t", index = False)
-    mae, rmse, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
+    mae, rmse, mre,rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
     write_parameters_file(param_dict, path2res)
     write_metrics_per_cc(res_table, path2res)
-    write_metric_txt(mae, rmse, rel_max_error, rel_mean_error, path2res)
+    write_metric_txt(mae, rmse, mre,rel_max_error, rel_mean_error, path2res)
 
     print ("The resuls written successfully! Exiting the program...")
     sys.exit(0)

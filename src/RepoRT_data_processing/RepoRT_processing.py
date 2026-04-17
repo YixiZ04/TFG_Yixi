@@ -35,8 +35,8 @@ from src.RepoRT_data_processing.RepoRT_preprocessing import get_preprocessed_dat
 
 # VARIABLES
 
-SOURCE_PATH = os.path.join (".", "data", "RepoRT", "processed_data/")
-PATH2INPUTS = os.path.join(".", "data", "RepoRT", "preprocessed_data/")
+SOURCE_PATH = os.path.join (".", "data", "RepoRT_RP", "processed_data/")
+PATH2INPUTS = os.path.join(".", "data", "RepoRT_RP", "preprocessed_data/")
 RT_INPUT = os.path.join(PATH2INPUTS, "preprocessed_rt_data.tsv")
 CC_INPUT = os.path.join(PATH2INPUTS, "preprocessed_cc_data.tsv")
 GRAD_INPUT = os.path.join(PATH2INPUTS, "preprocessed_gradient_data.tsv")
@@ -207,6 +207,14 @@ def _downsample(rt_df,
 
     return pd.concat (final_df)
 
+def _find_doublets(rt_df, path2dir):
+    """
+        Retrieves all the doublet entrees of RepoRT and the dataset we are using for training models.
+        Save the duplicated values as a .tsv in the directory where processed RepoRT data is found.
+    """
+    doublets_df = rt_df [rt_df.duplicated(subset=["dir_id", "smiles.std"], keep=False)]
+    path2file = os.path.join(path2dir, "doublets.tsv")
+    doublets_df.to_csv(path2file, sep="\t", index=False)
 
 def _get_max_mean_rt_per_cc (rt_df):
     """
@@ -241,6 +249,7 @@ def _get_processed_rt_df (rt_df,
         rt_df = _downsample(rt_df, path2dir)
     else:
         print("Not applting downsampling.")
+    _find_doublets(rt_df, path2dir)
     _get_max_mean_rt_per_cc(rt_df)
 
     path2file = os.path.join(path2dir, "processed_rt_data.tsv")
@@ -404,4 +413,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-    get_processed_df_from_raw(drop_smrt=True, down_grad_filter=True)
+    get_processed_df_from_raw(drop_smrt=False,
+                              down_grad_filter=False,)

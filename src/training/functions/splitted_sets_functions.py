@@ -259,6 +259,7 @@ def get_res_table (test_df, pred_array, save_dir, save_results=True, using_molde
     temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt"])
     temp_df ["rel_error_max"] = temp_df ["diff"]*100 / temp_df["max_rt"]
     temp_df ["rel_error_mean"] = temp_df ["diff"]*100 / temp_df["mean_rt"]
+    temp_df ["MRE"] = temp_df["diff"]*100 / temp_df ["rt"]
     filename = save_dir + "Results.tsv"
     if save_results:
         temp_df.to_csv(filename, sep="\t", index=False)
@@ -273,7 +274,8 @@ def metrics_from_dataframe (df):
     rmse = np.sqrt(np.mean (df["diff"] ** 2))
     mean_rel_error_max_rt = np.mean (df["rel_error_max"])
     mean_rel_error_mean_rt = np.mean (df["rel_error_mean"])
-    return mae, rmse, mean_rel_error_max_rt, mean_rel_error_mean_rt
+    mre = np.mean (df["MRE"])
+    return mae, rmse, mre, mean_rel_error_max_rt, mean_rel_error_mean_rt
 
 def write_metrics_per_cc (res_df, result_path):
     """
@@ -284,6 +286,7 @@ def write_metrics_per_cc (res_df, result_path):
         "cc":[],
         "MAE":[],
         "RMSE": [],
+        "MRE":[],
         "Mean_relative_error_max":[],
         "Mean_relative_error_mean":[]
     }
@@ -293,16 +296,21 @@ def write_metrics_per_cc (res_df, result_path):
         result ["cc"].append (index)
         result ["MAE"].append (np.mean (temp_df["diff"]))
         result ["RMSE"].append (np.sqrt (np.mean(temp_df["diff"] ** 2)))
+        result ["MRE"].append (np.mean (temp_df["MRE"]))
         result ["Mean_relative_error_max"].append (np.mean (temp_df["rel_error_max"]))
         result ["Mean_relative_error_mean"].append (np.mean (temp_df["rel_error_mean"]))
     result = pd.DataFrame(result)
     result.to_csv (result_path + "metrics_per_cc.tsv", sep="\t", index=False)
     return
 
-def write_metric_txt (mae, rmse, mean_rel_error_max_rt, mean_rel_error_mean_rt,results_path):
+def write_metric_txt (mae, rmse, mre, mean_rel_error_max_rt, mean_rel_error_mean_rt,results_path):
     filename = results_path + "metrics.txt"
     with open (filename, "w") as f:
-        f.write (f'MAE: {mae:.4f} s\nRMSE: {rmse:.4f} s.\nRelative error to max rt (%): {mean_rel_error_max_rt:.4f}\nRelative error to mean rt (%): {mean_rel_error_mean_rt:.4f}\n')
+        f.write (f'MAE: {mae:.4f} s\n'
+                 f'RMSE: {rmse:.4f} s.\n'
+                 f'MRE: {mre:.4f} %\n'
+                 f'Relative error to max rt (%): {mean_rel_error_max_rt:.4f}\n'
+                 f'Relative error to mean rt (%): {mean_rel_error_mean_rt:.4f}\n')
 
 def write_parameters_file(param_dict, results_path):
     filename = results_path + "parameters.txt"

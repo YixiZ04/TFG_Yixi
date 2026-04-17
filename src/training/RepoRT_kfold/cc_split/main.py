@@ -4,9 +4,8 @@ import sys
 from pathlib import Path
 from lightning import pytorch as pl
 from src.training.functions.splitted_sets_functions import *
-from src.training.functions.k_fold_functions import split_dataset_into_k_folds
+from src.training.functions.k_fold_functions import split_dataset_into_k_folds, save_kfold
 from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
-
 
 #K-Fold parameters
 
@@ -17,21 +16,21 @@ OBJECTIVE_DICT = {f"k-fold{fold_index}":[] for fold_index in range(1, K+1)}     
 
 
 # DEFINE PARAMETERS
-SOURCE_PATH = os.path.join(".", "data", "RepoRT", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
-apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
+SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
+dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+apply_grad_down_threshold = False                                                      # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_kfold_moldesc" if using_moldescs else "RepoRT_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "01_08_04_2026/") #Change "dirname" for any name you want.
+moldesc_dir = "RepoRT_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "01_15_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 
 
 param_dict = {
-    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
-    "mp_depth": 3,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 1,                                  # Number of layers for the ffn.
+    "mp_hidden_dim": 451,                             # Hidden dimension of the message passing (MP) part
+    "mp_depth": 4,                                    # Depth/Number of Layers of the MP
+    "ffn_hidden_dim": 1493,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers": 4,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
@@ -67,15 +66,20 @@ if __name__ == "__main__":
             raise NameError(f"Check the dataset_type: {dataset_type}.")
 
     input_file = os.path.join (path2input, "complete_processed_data.tsv")
+
     if not Path(input_file).exists():
         get_processed_df_from_raw(drop_smrt=drop_smrt,
-                                  down_grad_filter=apply_grad_down_threshold)
+                                  down_grad_filter=apply_grad_down_threshold,)
+
     input_df = pd.read_csv(input_file, sep="\t")
 
     print("Input data are successfully read. Making the output directory...")
     os.makedirs(path2res, exist_ok=True)
 
     kfold_array = split_dataset_into_k_folds(input_df, OBJECTIVE_DICT, SIZE_DICT, "dir_id")
+    save_dir = os.path.join(path2input, "kfolds/")
+    os.makedirs(save_dir, exist_ok=True)
+    save_kfold(kfold_array, save_dir)
     k = len(kfold_array)
 
     for i in range(k):
@@ -108,8 +112,8 @@ if __name__ == "__main__":
 
         print ("Getting the DataLoaders...")
         train_loader, scaler, cc_shape = get_train_dataloader(scaled_train_df, using_moldescs=using_moldescs)
-        val_loader = get_test_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
-        test_loader = get_test_val_loader(scaled_test_df, scaler, using_moldescs=using_moldescs)
+        val_loader = get_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
+        test_loader = get_test_loader(scaled_test_df,  using_moldescs=using_moldescs)
 
         print ("Building and training the model...")
         mpnn, trainer = complete_cc_configure_train_model(scaler, train_loader, val_loader, param_dict, cc_shape = cc_shape,results_path=res_path, save_model=True)
@@ -123,5 +127,5 @@ if __name__ == "__main__":
         write_parameters_file(param_dict, res_path)
         write_metrics_per_cc(res_table, res_path)
         write_metric_txt(mae, rmse, rel_max_error, rel_mean_error, res_path)
-
+        del mpnn, trainer
         print ("The resuls written successfully! Exiting the program...")

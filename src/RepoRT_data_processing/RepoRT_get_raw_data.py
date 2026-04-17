@@ -15,6 +15,7 @@
     The last 3 file contains the metadata of RepoRT such as missing directories, missing values, etc..
     All the NA values have been maintained, if called from another Script they must be treated.
     NOTE: Some functions have been adapted from original RepoRT_get_all_data.py (RepoRT_preprocessing.py now), so removed from there as well.
+    Update: Added option for fetching Reverse Phase data, to separate it from the HILIC and "other". These last 2 types might be evaluated later.
 
 """
 
@@ -108,7 +109,39 @@ def _write_grad_report_file(not_found_array,
         f.writelines(f"{index}\n" for index in fr_imputation_array)
         f.write("The segments for each repository used for building the datatable are:\n")
         f.writelines(f"{index}: {array} segments\n" for dictionary in segment_array for index, array in dictionary.items())
-#
+
+def _write_info_report (info_dict,
+                        path2res,
+                        filename):
+    """
+        Writes a report file named "Report_info.txt" and contains the following information:
+            - The repositories whose method.type is RP (Reverse-Phase).
+            - The repositories whose method.type is HILIC (Hidrophilic-Interaction Liquid Cromatography)
+            - The repositories whose method.type is "Other". Needs deeper research on the details.
+            - The repositories whose method.type is missing ("NaN").
+    """
+    path2file = os.path.join (path2res,filename)
+    with open(path2file,"w") as f:
+        for key,index_array in info_dict.items():
+            f.write (f"The repositories whose method.type is {key} are:\n")
+            f.writelines(f"{index}\n" for index in index_array)
+
+def _write_dset_size_report (complete_df,
+                             path2dir,
+                             filename):
+    """
+        This function writes a report for the size of each subset of a dataset (complete_df).
+    """
+    path2file = os.path.join (path2dir,filename)
+    index_array = np.unique(complete_df ["dir_id"])
+    with open(path2file,"w") as f:
+        f.write(f"The total size of the dataset is: {complete_df.shape[0]}\n")
+        f.write ("The nº of molecules for each subset is:\n")
+        for index in index_array:
+            temp_df = complete_df[complete_df["dir_id"] == index]
+            f.write(f"{index}: {len(temp_df)} molecules\n")
+
+# FUNCTIONS TO FETCH DATA
 def _fetch_raw_rt_data (seed_url=SEED_URL,
                        repos_array=REPOS,
                        path2res=PATH2RES,
@@ -155,7 +188,7 @@ def _fetch_raw_rt_data (seed_url=SEED_URL,
     # Write the final outputs:
     rt_data_file = os.path.join(path2res,filename)
     rt_metadata_file = "Report_rt.txt"
-    final_df.to_csv(rt_data_file, sep="\t", index=False)
+    final_dataframe.to_csv(rt_data_file, sep="\t", index=False)
     _write_rt_report_file(existing_index,
                           index_not_existing_array,
                           isomeric_not_found_array,
@@ -272,7 +305,37 @@ def _fetch_raw_gradient_data(seed_url=SEED_URL,
                             path2res, "Report_grad.txt")
     return final_df
 
+def _fetch_info_data(seed_url = SEED_URL,
+                     repos_array=REPOS,
+                     path2res = PATH2RES,
+                     ):
+    """
+        Fetches info data from RepoRT. Returns a dictionary containing chromatography tupe as keys and an array containing corresponding indexes.
+        Also writes a report file indicating the dir_id for each chromatography type.
+    """
+    final_dict = {}
+    not_found_array = []
+    index_array = _num2index(repos_array)
+    for index in index_array:
+        info_url = f'{seed_url}{index}/{index}_info.tsv'
+        print (f"Fetching info data for {index}...")
+        try:
+            info_df = pd.read_csv(info_url, sep="\t", encoding="utf-8")
+            chromatography_type = str(info_df ["method.type"] [0])
+            if chromatography_type not in final_dict:
+                final_dict[chromatography_type] = [index]
+            else:
+                final_dict[chromatography_type].append(index)
+        except (urllib.error.HTTPError, pd.errors.EmptyDataError):
+            print(f"The repo nº {index} has not been found in the dataset. And it will be skipped...")
+            not_found_array.append(index)
+    _write_info_report(final_dict,
+                       path2res,
+                       "Report_info.txt")
+    return final_dict
 
+
+# THE USEFUL FUNCTION
 def merge_complete_file(path2res=PATH2RES):
     """
         This function gets the merged df with all retention time data, gradient data and cc_data
@@ -283,14 +346,27 @@ def merge_complete_file(path2res=PATH2RES):
     rt_data = _fetch_raw_rt_data()
     cc_data = _fetch_raw_column_metadata()
     grad_data = _fetch_raw_gradient_data()
+    info_data = _fetch_info_data()
     rt_cc_df = pd.merge(rt_data, cc_data, on="dir_id", how="inner")
     complete_df = pd.merge(rt_cc_df, grad_data, on="dir_id", how="inner")
     path2file = os.path.join(path2res,"complete_raw_data.tsv")
+    _write_dset_size_report(complete_df, path2res, "Report_size.txt")
     complete_df.to_csv(path2file, sep="\t", index=False)
 
+    for key, index_array in info_data.items():
+        new_path2dir = os.path.join (".", "data", f"RepoRT_{key}", "raw_data/")
+        os.makedirs(new_path2dir, exist_ok=True)
+        temp_complete_df = complete_df[complete_df["dir_id"].isin(index_array)]
+        temp_rt_df = rt_data[rt_data["dir_id"].isin(index_array)]
+        temp_cc_df = cc_data[cc_data["dir_id"].isin(index_array)]
+        temp_grad_df = grad_data[grad_data["dir_id"].isin(index_array)]
+        _write_dset_size_report(temp_complete_df, new_path2dir, "Report_size.txt")
+        temp_complete_df.to_csv (os.path.join(new_path2dir, "complete_raw_data.tsv"), sep="\t", index=False)
+        temp_rt_df.to_csv(os.path.join(new_path2dir, "raw_rt_data.tsv"), sep="\t", index=False)
+        temp_cc_df.to_csv(os.path.join(new_path2dir, "raw_cc_data.tsv"), sep="\t", index=False)
+        temp_grad_df.to_csv(os.path.join(new_path2dir, "raw_grad_data.tsv"), sep="\t", index=False)
 
 
 if __name__ == "__main__":
-    merge_complete_file()
-
+    merge_complete_file(path2res=PATH2RES)
 

@@ -9,7 +9,7 @@
         3. Change units for the metadata.
         4. Remove all the .units columns from metadata.
         5. Implement imputation to metadata. The strategy for now is the mean value for column metadata and 0s for all the eluent data.
-            5.1. The t0 value fo the columns is also inferrd from the imputed values.
+            5.1. The t0 value for the columns is also inferrd from the imputed values.
         6. The column.usp.code is OneHotEncoded.
         7. Eliminates the flow rate [ml/min] from the gradient_data
     At the same time, all processed gradient data, column metadata and molecule data will be store separately as well as the complete preprocessed file.
@@ -39,19 +39,15 @@ from rdkit.Chem.rdMolDescriptors import CalcMolFormula
 from src.RepoRT_data_processing.RepoRT_get_raw_data import merge_complete_file
 
 #PARAMETERS
-
-PATH2DIR = os.path.join (".", "data", "RepoRT", "preprocessed_data/")
-PATH2INPUTS = os.path.join(".", "data", "RepoRT", "raw_data/")
-RT_INPUT = os.path.join(PATH2INPUTS, "raw_rt_data.tsv")
-CC_INPUT = os.path.join(PATH2INPUTS, "raw_cc_data.tsv")
-GRAD_INPUT = os.path.join(PATH2INPUTS, "raw_grad_data.tsv")
+EVALUABLE_METHODS = ("RP", "HILIC", "Other", "nan","_")
+PATH2DIR = os.path.join (".", "data/", )
 
 
 # HELPER FUNCTIONS
 
-def _get_input_df (rt_input = RT_INPUT,
-                   cc_input = CC_INPUT,
-                   grad_input = GRAD_INPUT):
+def _get_input_df (rt_input,
+                   cc_input,
+                   grad_input):
     """
         This function checks for the input files and loads then as pd.DataFrames
     """
@@ -134,7 +130,7 @@ def _get_new_formula (df):
     return df
 
 def _obtain_preprocessed_rt_df (rt_df,
-                                path2dir=PATH2DIR,
+                                path2dir,
                                 filename="preprocessed_rt_data.tsv"):
     """
         Preprocesses the RT data and saves it as a tsv file
@@ -144,7 +140,7 @@ def _obtain_preprocessed_rt_df (rt_df,
 
     print("Updating the formulas...")
     final_df = _get_new_formula(rt_df)
-    final_df["dir_id"] = [str(idmol).split("_")[0] for idmol in final_df["id"]]
+    final_df["dir_id"] = [str(idmol).split("_")[0] for idmol in final_df["molecule_id"]]
 
     path2file = os.path.join(path2dir, filename)
     print(f"Saving the preprocessed RT in {path2file}")
@@ -271,7 +267,7 @@ def _get_one_hot_encoded_df (df):
     return updated_df
 
 def _obtain_preprocessed_cc_data(cc_df,
-                                 path2dir = PATH2DIR,
+                                 path2dir,
                                  filename="preprocessed_cc_data.tsv"):
     """
         This function preprocesses the cc data and save it the output directory.
@@ -298,7 +294,7 @@ def _obtain_preprocessed_cc_data(cc_df,
 
 
 def _drop_flow_rate (grad_df,
-                     path2dir = PATH2DIR,
+                     path2dir,
                      filename="preprocessed_gradient_data.tsv"):
     """
         Drops all the columns that contain flow rate data. As this data repeats in every segment, it should be redundant.
@@ -318,30 +314,45 @@ def _drop_flow_rate (grad_df,
 
     return grad_df
 
-def get_preprocessed_datatable(path2dir = PATH2DIR):
+def get_preprocessed_datatable(path2dir = PATH2DIR,
+                               method_array = EVALUABLE_METHODS):
     """
         This is the main function to export. As it will build the preprocessed datatable as well as writing each one of the preprocessed rt, cc and gradient data.
         This also includes getting raw data if not exists.
     """
-    # Make the dir if not existing
-    os.makedirs (path2dir,  exist_ok =True)
+    for method in method_array:
+        if method == "_":
+            new_path2dir =os.path.join(path2dir, "RepoRT/")
+        else:
+            new_path2dir = os.path.join(path2dir, f"RepoRT_{method}/", )
 
-    # Input checking
-    rt_df, cc_df, grad_df = _get_input_df()
+        new_rt_input = os.path.join(new_path2dir, "raw_data", f"raw_rt_data.tsv")
+        new_cc_input = os.path.join(new_path2dir, "raw_data", f"raw_cc_data.tsv")
+        new_grad_input = os.path.join(new_path2dir, "raw_data", f"raw_grad_data.tsv")
+        output_dir = os.path.join (new_path2dir, "preprocessed_data/")
+        print(f"{new_path2dir}\n{new_rt_input}\n{new_cc_input}\n{new_grad_input}\n{output_dir}")
 
-    # RT preprocessing
-    preprocessed_rt_df = _obtain_preprocessed_rt_df(rt_df)
-    preprocessed_cc_df = _obtain_preprocessed_cc_data(cc_df)
-    preprocessed_grad_df = _drop_flow_rate(grad_df)
+        # Make the dir if not existing
+        os.makedirs (output_dir,  exist_ok =True)
 
-    print ("Making the complete preprocessed datatable...")
-    rt_cc_df = pd.merge(preprocessed_rt_df, preprocessed_cc_df, on="dir_id", how="inner")
-    final_df = pd.merge(rt_cc_df, preprocessed_grad_df, on="dir_id", how="inner")
-    final_df["dir_id"] = [str(idmol).split("_")[0] for idmol in final_df["id"]]
-    path2complete_file = os.path.join(path2dir, "complete_preprocessed_data.tsv")
+        # Input checking
+        RT_DF, CC_DF, GRAD_DF = _get_input_df(rt_input = new_rt_input,
+                                              cc_input = new_cc_input,
+                                              grad_input = new_grad_input,)
 
-    print(f"Saving the complete preprocessed data as {path2complete_file}...")
-    final_df.to_csv(path2complete_file, sep='\t', index=False)
+        # RT preprocessing
+        preprocessed_rt_df = _obtain_preprocessed_rt_df(rt_df = RT_DF, path2dir=output_dir, filename ="preprocessed_rt_data.tsv")
+        preprocessed_cc_df = _obtain_preprocessed_cc_data(cc_df = CC_DF, path2dir=output_dir, filename ="preprocessed_cc_data.tsv")
+        preprocessed_grad_df = _drop_flow_rate(grad_df = GRAD_DF, path2dir=output_dir, filename="preprocessed_gradient_data.tsv")
+
+        print ("Making the complete preprocessed datatable...")
+        rt_cc_df = pd.merge(preprocessed_rt_df, preprocessed_cc_df, on="dir_id", how="inner")
+        final_df = pd.merge(rt_cc_df, preprocessed_grad_df, on="dir_id", how="inner")
+        final_df["dir_id"] = [str(idmol).split("_")[0] for idmol in final_df["molecule_id"]]
+        path2complete_file = os.path.join(output_dir, "complete_preprocessed_data.tsv")
+
+        print(f"Saving the complete preprocessed data as {path2complete_file}...")
+        final_df.to_csv(path2complete_file, sep='\t', index=False)
 
 
 #Get raw datatable

@@ -66,11 +66,43 @@ def split_dataset_into_k_folds(df, objective_dict, size_dict, column_name):
         final_array.append(temp_df)
     return final_array
 
+def save_kfold (df_array, path2dir):
+    k = len(df_array)
+
+    for i in range(k):
+        test_df = df_array[i]
+        val_df =df_array[(i + 1) % k]
+        train_df = [
+            df_array[j]
+            for j in range(k)
+            if j != i and j != (i + 1) % k
+        ]
+        train_df = pd.concat(train_df, ignore_index=True)
+        path2save = os.path.join(path2dir, f"k_fold_{i}/")
+        os.makedirs(path2save, exist_ok=True)
+        test_df.to_csv(os.path.join(path2save, "test.tsv"), sep='\t', index=False)
+        train_df.to_csv(os.path.join(path2save, "train.tsv"), sep='\t', index=False)
+        val_df.to_csv(os.path.join(path2save, "val.tsv"), sep='\t', index=False)
+        report_filename = os.path.join(path2save, "report.txt")
+        with open(report_filename, "w") as f:
+            f.write("The train set contains:\n")
+            f.writelines(f"{dir_id}\n" for dir_id in np.unique(train_df["dir_id"]))
+            f.write("The val set contains:\n")
+            f.writelines(f"{dir_id}\n" for dir_id in np.unique(val_df["dir_id"]))
+            f.write("The test set contains:\n")
+            f.writelines(f"{dir_id}\n" for dir_id in np.unique(test_df["dir_id"]))
+
 # Results functions
 
 
 if __name__ == "__main__":
-    test_df = pd.read_csv(os.path.join(".", "data", "processed_RepoRT", "with_SMRT", "scaffold_split_data", "ms_complete_data.tsv"), sep='\t')
-    final_array = split_dataset_into_k_folds(test_df, OBJECTIVE_DICT,SIZE_DICT, "ms_smiles")
-    for df in final_array:
-        print (len(df))
+    SIZE_DICT = {f"k-fold{fold_index}": 0 for fold_index in range(1, K + 1)}  # This will store the size of each split
+    OBJECTIVE_DICT = {f"k-fold{fold_index}": [] for fold_index in
+                      range(1, K + 1)}  # This will store the cc or murcko scaffold
+    path2input = os.path.join(".", "data", "RepoRT", "processed_data","no_SMRT", "complete_processed_data.tsv")
+    input_df = pd.read_csv(path2input, sep="\t")
+    final_array = split_dataset_into_k_folds(input_df, OBJECTIVE_DICT,SIZE_DICT, "dir_id")
+    path2dir = os.path.join (".", "data", "RepoRT", "processed_data", "no_SMRT", "kfolds/")
+    os.makedirs(path2dir, exist_ok=True)
+    save_kfold(final_array, path2dir)
+
