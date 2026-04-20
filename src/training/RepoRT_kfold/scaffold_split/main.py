@@ -15,13 +15,13 @@ OBJECTIVE_DICT = {f"k-fold{fold_index}":[] for fold_index in range(1, K+1)}     
 
 
 # DEFINE PARAMETERS
-SOURCE_PATH = os.path.join(".", "data", "RepoRT", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
+dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
 apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_kfold_moldesc" if using_moldescs else "RepoRT_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "scaffold_split", "01_08_04_2026/") #Change "dirname" for any name you want.
+moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "scaffold_split", "01_20_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 
 
@@ -63,10 +63,12 @@ if __name__ == "__main__":
                 path2input = os.path.join(SOURCE_PATH, "with_SMRT/")
         case _:
             raise NameError(f"Check the dataset_type: {dataset_type}.")
-
+    processed_file = os.path.join(path2input, "complete_processed_data.tsv")
     input_file = os.path.join (path2input, "ms_split", "ms_complete_data.tsv")
     if not Path(input_file).exists ():
-        ms_split(drop_smrt=drop_smrt,
+        ms_split(input_path=processed_file,
+                 output_dir=path2input,
+                 drop_smrt=drop_smrt,
                  apply_low_grad_filter=apply_grad_down_threshold)
     input_df = pd.read_csv(input_file, sep="\t")
 
@@ -123,3 +125,4 @@ if __name__ == "__main__":
         write_metric_txt(mae, rmse, mre, rel_max_error, rel_mean_error, res_path)
 
         print ("The resuls written successfully! Exiting the program...")
+        sys.exit(0)

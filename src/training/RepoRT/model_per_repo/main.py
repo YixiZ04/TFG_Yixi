@@ -37,7 +37,7 @@ apply_grad_down_threshold = False                                               
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_17_04_2026/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_20_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 
 

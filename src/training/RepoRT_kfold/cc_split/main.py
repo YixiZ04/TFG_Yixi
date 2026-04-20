@@ -21,7 +21,7 @@ dataset_type = "no_SMRT"                                                        
 apply_grad_down_threshold = False                                                      # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
+moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
 path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "01_15_04_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 
@@ -129,3 +129,4 @@ if __name__ == "__main__":
         write_metric_txt(mae, rmse, mre, rel_max_error, rel_mean_error, res_path)
         del mpnn, trainer
         print ("The resuls written successfully! Exiting the program...")
+        sys.exit(0)
