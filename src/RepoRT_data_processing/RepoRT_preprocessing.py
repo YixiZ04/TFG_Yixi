@@ -88,9 +88,9 @@ def _transform_min2s(df):
     """
         This functions converts minutes to s and renames the column from "rt" to "rt_s"
     """
-    df["rt"] = round(df["rt"] * 60, 2)
-    #@TODO ojo que lo que había originalmente no cambiaba el nombre de la columna si no sólo del índice.
-    final_df = df.rename(columns={"rt": "rt_s"})
+    final_df = df.copy()
+    final_df["rt"] = round(final_df["rt"] * 60, 2)
+
     return final_df
 
 def _get_mol_formula_by_inchi (inchi):

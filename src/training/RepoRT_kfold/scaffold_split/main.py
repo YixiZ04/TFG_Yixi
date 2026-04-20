@@ -106,8 +106,8 @@ if __name__ == "__main__":
 
         print ("Getting the DataLoaders...")
         train_loader, scaler, cc_shape = get_train_dataloader(scaled_train_df, using_moldescs=using_moldescs)
-        val_loader = get_test_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
-        test_loader = get_test_val_loader(scaled_test_df, scaler, using_moldescs=using_moldescs)
+        val_loader = get_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
+        test_loader = get_test_loader(scaled_test_df, using_moldescs=using_moldescs)
 
         print ("Building and training the model...")
         mpnn, trainer = complete_cc_configure_train_model(scaler, train_loader, val_loader, param_dict, cc_shape = cc_shape,results_path=res_path, save_model=True)
@@ -117,9 +117,9 @@ if __name__ == "__main__":
         test_pred = trainer.predict(mpnn, test_loader)
         test_pred = np.concatenate(test_pred, axis=0)
         res_table = get_res_table(test_df, test_pred, res_path, using_moldescs=using_moldescs)
-        mae, rmse, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
+        mae, rmse, mre, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
         write_parameters_file(param_dict, res_path)
         write_metrics_per_cc(res_table, res_path)
-        write_metric_txt(mae, rmse, rel_max_error, rel_mean_error, res_path)
+        write_metric_txt(mae, rmse, mre, rel_max_error, rel_mean_error, res_path)
 
         print ("The resuls written successfully! Exiting the program...")

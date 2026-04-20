@@ -52,8 +52,7 @@ if __name__ == "__main__":
     os.makedirs(path2res, exist_ok=True)
 
     print (f"Getting DataLoaders and train chemprop model...")
-    #@TODO: Ojo que la siganture de la función es def get_dataloaders (feature_array, target_array); No parece haber el parámetro dataset
-    scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=inchi_array,target_array=rts, dataset="SMRT")
+    scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=inchi_array,target_array=rts)
     mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=True)
 
     print ("Getting the predictions...")
