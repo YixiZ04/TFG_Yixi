@@ -123,6 +123,7 @@ if __name__ == "__main__":
         test_pred = trainer.predict(mpnn, test_loader)
         test_pred = np.concatenate(test_pred, axis=0)
         res_table = get_res_table(test_df, test_pred, res_path, using_moldescs=using_moldescs)
+        #@TODO ¿falta la nueva métrica no?
         mae, rmse, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
         write_parameters_file(param_dict, res_path)
         write_metrics_per_cc(res_table, res_path)

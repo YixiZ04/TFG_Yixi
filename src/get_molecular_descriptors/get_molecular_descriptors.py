@@ -22,7 +22,7 @@ import pubchempy as pcp
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from src.get_raw_data.RepoRT_get_all_data import get_raw_datatable
+from src.RepoRT_data_processing.RepoRT_get_raw_data import merge_complete_file
 
 
 # 1. Define the functions
@@ -32,8 +32,8 @@ def build_mol_desc_dict_from_inchi (path2raw_report="./data/no_extra_mol_desc/Re
     Output: The dataframe saved in the indicated path.
     """
     # Check if the raw RepoRT datafile exists first, if not it is built.
-    if not Path (path2raw_report):
-        get_raw_datatable()
+    if not Path(path2raw_report).exists():
+        merge_complete_file()
     df = pd.read_csv(path2raw_report, sep="\t")
     inchi_array = df.loc[:, "inchi.std"].values
     mono_mw_dict = {}

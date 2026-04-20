@@ -80,10 +80,13 @@ if __name__ == "__main__":
                 raise NameError (f"The dataset given: {dataset_type} is not correct! Please check again...")
         match split_type:
             case "random_split":
+            #@TODO revisar; la función es def split_train_val_test (input_path, output_dir, drop_smrt, apply_low_grad_filter); 
                 split_train_val_test(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_upthreshold=apply_upthreshold)
             case "cc_split":
+            #@TODO revisar; la función es def split_train_val_test (input_path, output_dir, drop_smrt, apply_low_grad_filter); 
                 cc_split(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_upthreshold=apply_upthreshold)
             case "scaffold_split":
+            #@TODO revisar; la función es def split_train_val_test (input_path, output_dir, drop_smrt, apply_low_grad_filter); 
                 ms_split(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_upthreshold=apply_upthreshold)
             case "cc_scaffold_split":
                 cc_ms_split(ms_complete_file = os.path.join (".", "data", "processed_RepoRT", dataset_type, "scaffold_split_data/", "ms_complete_data.tsv"),
