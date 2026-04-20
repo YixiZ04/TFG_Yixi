@@ -30,8 +30,8 @@ from src.training.RepoRT.cc_scaffold_split.perform_cc_scaffold_split import cc_m
 num_trails = 2                                                                                  # This is the numbers of trials to run, set to 2 for demonstration purpose.
 dataset_type = "with_SMRT"                                                                      # Or "no_SMRT", depends on which dataset you want to use.
 split_type = "random_split"                                                                     # "cc_split", "scaffold_split", "cc_scaffold_split"
-input_dir = os.path.join (".", "data", "processed_RepoRT/", dataset_type, split_type + "_data/")
-path2res = os.path.join (".", "logs", "hpopting","RepoRT", dataset_type, split_type, "dirname/" )  # This is the result path to save the results. Change it when run a hyperparameter optimization.
+input_dir = os.path.join (".", "data", "RepoRT_RP", "processed_data/", dataset_type, split_type + "_data/")
+path2res = os.path.join (".", "logs", "hpopting","RepoRT_RP", dataset_type, split_type, "dirname/" )  # This is the result path to save the results. Change it when run a hyperparameter optimization.
 
 def build_config (trial):
     """
