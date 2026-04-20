@@ -91,8 +91,10 @@ def get_scaled_input_train_data (train_df):
     train_input_scaler.fit (input_data) #This would be returned as output.
     position = train_df.columns.get_loc("column.length")
     columns_used = train_df.columns [position:]
-    train_df [columns_used] = train_input_scaler.transform(train_df [columns_used])
-    return train_df, train_input_scaler
+    # FIXED THE SCALING PROBLEM
+    final_df = train_df.copy()
+    final_df [columns_used] = train_input_scaler.transform(final_df [columns_used])
+    return final_df, train_input_scaler
 
 def get_scaled_datasets (df, train_input_scaler):
     """
@@ -101,8 +103,10 @@ def get_scaled_datasets (df, train_input_scaler):
     """
     position = df.columns.get_loc("column.length")
     columns_used = df.columns[position:]
-    df [columns_used] = train_input_scaler.transform(df[columns_used])
-    return df
+    #FIXED THE SCALING PROBLEM
+    final_df = df.copy()
+    final_df [columns_used] = train_input_scaler.transform(final_df[columns_used])
+    return final_df
 
 def get_train_dataloader (train_df, using_moldescs=False):
     """
