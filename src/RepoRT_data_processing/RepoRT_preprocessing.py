@@ -331,7 +331,6 @@ def get_preprocessed_datatable(path2dir = PATH2DIR,
         new_cc_input = os.path.join(new_path2dir, "raw_data", f"raw_cc_data.tsv")
         new_grad_input = os.path.join(new_path2dir, "raw_data", f"raw_grad_data.tsv")
         output_dir = os.path.join (new_path2dir, "preprocessed_data/")
-        print(f"{new_path2dir}\n{new_rt_input}\n{new_cc_input}\n{new_grad_input}\n{output_dir}")
 
         # Make the dir if not existing
         os.makedirs (output_dir,  exist_ok =True)

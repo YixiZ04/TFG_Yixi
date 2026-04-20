@@ -54,7 +54,7 @@ def _get_input_df (rt_input = RT_INPUT,
     """
         This function checks for the input files and loads then as pd.DataFrames
     """
-    print ("Cheking fot the input files...")
+    print ("Cheking for the input files...")
     if (not Path(rt_input).exists() or
         not Path(cc_input).exists() or
         not Path(grad_input).exists()):
