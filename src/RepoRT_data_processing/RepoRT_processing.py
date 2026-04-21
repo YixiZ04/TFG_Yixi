@@ -39,6 +39,7 @@ SOURCE_PATH = os.path.join (".", "data", "RepoRT_RP", "processed_data/")
 PATH2INPUTS = os.path.join(".", "data", "RepoRT_RP", "preprocessed_data/")
 RT_INPUT = os.path.join(PATH2INPUTS, "preprocessed_rt_data.tsv")
 CC_INPUT = os.path.join(PATH2INPUTS, "preprocessed_cc_data.tsv")
+DOUBLET_THRESHOLD = 0.1
 GRAD_INPUT = os.path.join(PATH2INPUTS, "preprocessed_gradient_data.tsv")
 GRAD2DROP_UP = 11
 GRAD2DROP_DOWN = 2
@@ -207,15 +208,6 @@ def _downsample(rt_df,
 
     return pd.concat (final_df)
 
-def _find_doublets(rt_df, path2dir):
-    """
-        Retrieves all the doublet entrees of RepoRT and the dataset we are using for training models.
-        Save the duplicated values as a .tsv in the directory where processed RepoRT data is found.
-    """
-    doublets_df = rt_df [rt_df.duplicated(subset=["dir_id", "smiles.std"], keep=False)]
-    path2file = os.path.join(path2dir, "doublets.tsv")
-    doublets_df.to_csv(path2file, sep="\t", index=False)
-
 def _get_max_mean_rt_per_cc (rt_df):
     """
         This function get the max and mean rt for every chromatography column and inserts them next to "rt_s" column of the dataframe.
@@ -235,6 +227,68 @@ def _get_max_mean_rt_per_cc (rt_df):
     position = rt_df.columns.get_loc ("rt")
     rt_df.insert (position + 1, "max_rt", max_array)
     rt_df.insert (position + 2, "mean_rt", mean_array)
+#Doublets treating functions
+
+def _find_doublets(rt_df, path2dir):
+    """
+        Retrieves all the doublet entrees of RepoRT and the dataset we are using for training models.
+        Save the duplicated values as a .tsv in the directory where processed RepoRT data is found.
+        This function outputs 2 Dataframes (while mantaining the original one untouched):
+            - A df without any doublets at all
+            - A df containing only doublets
+    """
+    no_doublets_df = rt_df [~rt_df.duplicated(subset=["dir_id", "smiles.std"], keep=False)]
+    doublets_df = rt_df [rt_df.duplicated(subset=["dir_id", "smiles.std"], keep=False)]
+    path2file = os.path.join(path2dir, "doublets.tsv")
+    doublets_df.to_csv(path2file, sep="\t", index=False)
+
+    return no_doublets_df, doublets_df
+
+def _treat_doublets(only_doublet_df, path2save, doublet_threshold=DOUBLET_THRESHOLD):
+    """
+        This functions treats the doublets. The difference is calculated as max(doublet_RT time) - min(doublet_RT time).
+        If this difference > doublet_threshold, the entire doublet will be dropped, else the only entree will be kept using the
+        mean RT.
+        doublet_threshold is a percentage used to implement a threshold regarding the max_rt for the repo.
+        Also, 2 .tsv files are saved with names "treated_doublets.tsv" and "dropped_doublets.tsv", as their name indicates, they contain inforamtion
+        for the treated doublets and the dropped doublets.
+        NOTE: max() and min() are used because there are "plus-que-doublets" situation, which consists of >2 identical SMILES having
+        different RTs.
+    """
+    row_array = []
+    dropped_doublets_array = []
+    grouped_df = only_doublet_df.groupby (["dir_id", "smiles.std"])
+    for _,doublet in grouped_df:
+        diff = doublet["rt"].max() - doublet["rt"].min()
+        # Should not be a problem, as the max_rt should be the same for a repo
+        temp_threshold = doublet_threshold * doublet.iloc[0] ["max_rt"]
+        if diff > temp_threshold:
+            dropped_doublets_array.append(doublet)
+        else:
+            temp_row = doublet.iloc[[0]]
+            temp_row ["rt"] = doublet["rt"].mean()
+            row_array.append (temp_row)
+    treated_doublets = pd.concat(row_array, ignore_index=True)
+    dropped_doublets = pd.concat(dropped_doublets_array, ignore_index=True)
+
+    path2file = os.path.join (path2save, "treated_doublets.tsv")
+    path2droppedfile = os.path.join(path2save, "dropped_doublets.tsv")
+
+    treated_doublets.to_csv(path2file, sep='\t', index=False)
+    dropped_doublets.to_csv (path2droppedfile, sep='\t', index=False)
+
+    return treated_doublets
+
+def _merge_treated_doublets (no_doublets_rt_df,
+                             treated_doublets_df):
+    """
+        Merges the no-containing doublet and the treated_doublets df together.
+        Finally, a sorting will be done by "molecule_id".
+    """
+    unsorted_df = pd.concat([no_doublets_rt_df,treated_doublets_df],
+                            ignore_index=True)
+    sorted_df = unsorted_df.sort_values(by=["molecule_id"])
+    return sorted_df
 
 def _get_processed_rt_df (rt_df,
                           downsampling,
@@ -249,13 +303,15 @@ def _get_processed_rt_df (rt_df,
         rt_df = _downsample(rt_df, path2dir)
     else:
         print("Not applting downsampling.")
-    _find_doublets(rt_df, path2dir)
     _get_max_mean_rt_per_cc(rt_df)
+    no_doublets_df, doublets_df = _find_doublets(rt_df, path2dir)
+    treated_doublets = _treat_doublets(doublets_df, path2dir)
+    final_df = _merge_treated_doublets(no_doublets_df, treated_doublets)
 
     path2file = os.path.join(path2dir, "processed_rt_data.tsv")
-    rt_df.to_csv(path2file, sep="\t", index=False)
+    final_df.to_csv(path2file, sep="\t", index=False)
 
-    return rt_df
+    return final_df
 
 # DEFINE CC PROCESSING FUNCTION
 
@@ -413,5 +469,10 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-    get_processed_df_from_raw(drop_smrt=False,
-                              down_grad_filter=False,)
+    # get_processed_df_from_raw(drop_smrt=False,
+    #                           down_grad_filter=False,)
+    RT_DF, cc_df, grad_df = _get_input_df()
+    print("Finished fetching inpur_df")
+    temp_path = "./data/"
+    os.makedirs(temp_path  + "report_files/", exist_ok=True)
+    res_df = _get_processed_rt_df(RT_DF, downsampling=False, path2dir=temp_path)
