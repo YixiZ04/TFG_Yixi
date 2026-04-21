@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from lightning import pytorch as pl
 from src.training.functions.splitted_sets_functions import *
-from src.training.functions.k_fold_functions import split_dataset_into_k_folds
+from src.training.functions.k_fold_functions import split_dataset_into_k_folds, save_kfold
 from src.training.RepoRT.scaffold_split.perform_scaffold_split import ms_split
 #K-Fold parameters
 
@@ -76,6 +76,8 @@ if __name__ == "__main__":
     os.makedirs(path2res, exist_ok=True)
 
     kfold_array = split_dataset_into_k_folds(input_df, OBJECTIVE_DICT, SIZE_DICT, "ms_smiles")
+    save_dir = os.path.join(path2input, "kfolds", "ms_split/")
+    save_kfold(kfold_array, save_dir)
     k = len(kfold_array)
 
     for i in range(k):
@@ -125,4 +127,4 @@ if __name__ == "__main__":
         write_metric_txt(mae, rmse, mre, rel_max_error, rel_mean_error, res_path)
 
         print ("The resuls written successfully! Exiting the program...")
-        sys.exit(0)
+    sys.exit(0)

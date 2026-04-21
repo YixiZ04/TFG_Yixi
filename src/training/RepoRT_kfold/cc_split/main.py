@@ -77,7 +77,7 @@ if __name__ == "__main__":
     os.makedirs(path2res, exist_ok=True)
 
     kfold_array = split_dataset_into_k_folds(input_df, OBJECTIVE_DICT, SIZE_DICT, "dir_id")
-    save_dir = os.path.join(path2input, "kfolds/")
+    save_dir = os.path.join(path2input, "kfolds", "cc_split/")
     os.makedirs(save_dir, exist_ok=True)
     save_kfold(kfold_array, save_dir)
     k = len(kfold_array)
@@ -129,4 +129,4 @@ if __name__ == "__main__":
         write_metric_txt(mae, rmse, mre, rel_max_error, rel_mean_error, res_path)
         del mpnn, trainer
         print ("The resuls written successfully! Exiting the program...")
-        sys.exit(0)
+    sys.exit(0)
