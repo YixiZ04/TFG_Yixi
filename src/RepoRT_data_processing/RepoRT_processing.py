@@ -469,10 +469,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-    # get_processed_df_from_raw(drop_smrt=False,
-    #                           down_grad_filter=False,)
-    RT_DF, cc_df, grad_df = _get_input_df()
-    print("Finished fetching inpur_df")
-    temp_path = "./data/"
-    os.makedirs(temp_path  + "report_files/", exist_ok=True)
-    res_df = _get_processed_rt_df(RT_DF, downsampling=False, path2dir=temp_path)
+     get_processed_df_from_raw(drop_smrt=False,
+                               down_grad_filter=False,)
