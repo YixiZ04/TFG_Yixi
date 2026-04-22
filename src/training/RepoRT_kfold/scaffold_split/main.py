@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from lightning import pytorch as pl
 from src.training.functions.splitted_sets_functions import *
-from src.training.functions.k_fold_functions import split_dataset_into_k_folds
+from src.training.functions.k_fold_functions import split_dataset_into_k_folds, save_cc_or_scaffold_kfolds, write_overall_results
 from src.training.RepoRT.scaffold_split.perform_scaffold_split import ms_split
 #K-Fold parameters
 
@@ -21,21 +21,21 @@ apply_grad_down_threshold = False                                               
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "scaffold_split", "01_20_04_2026/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "scaffold_split", "dirname/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 
 
 param_dict = {
-    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
-    "mp_depth": 3,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 1,                                  # Number of layers for the ffn.
+    "mp_hidden_dim": 460,                             # Hidden dimension of the message passing (MP) part
+    "mp_depth": 4,                                    # Depth/Number of Layers of the MP
+    "ffn_hidden_dim": 1400,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers":3,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
+    "dropout_rate": 0.12,                              # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     input_file = os.path.join (path2input, "ms_split", "ms_complete_data.tsv")
     if not Path(input_file).exists ():
         ms_split(input_path=processed_file,
-                 output_dir=path2input,
+                 output_dir=os.path.join(path2input, "ms_split/"),
                  drop_smrt=drop_smrt,
                  apply_low_grad_filter=apply_grad_down_threshold)
     input_df = pd.read_csv(input_file, sep="\t")
@@ -76,7 +76,16 @@ if __name__ == "__main__":
     os.makedirs(path2res, exist_ok=True)
 
     kfold_array = split_dataset_into_k_folds(input_df, OBJECTIVE_DICT, SIZE_DICT, "ms_smiles")
+    save_dir = os.path.join(path2input, "kfolds", "ms_split/")
+    save_cc_or_scaffold_kfolds(kfold_array, "ms_smiles", save_dir)
     k = len(kfold_array)
+    metrics_dict = {
+        "MAE": [],
+        "RMSE": [],
+        "MRE": [],
+        "rel_max_rt_error": [],
+        "rel_mean_rt_error": [],
+    }
 
     for i in range(k):
         res_path = os.path.join (path2res, f"kfold_{i}/")
@@ -120,9 +129,15 @@ if __name__ == "__main__":
         test_pred = np.concatenate(test_pred, axis=0)
         res_table = get_res_table(test_df, test_pred, res_path, using_moldescs=using_moldescs)
         mae, rmse, mre, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
+        # This is new
+        metrics_dict["MAE"].append(mae)
+        metrics_dict["RMSE"].append(rmse)
+        metrics_dict["MRE"].append(mre)
+        metrics_dict["rel_max_rt_error"].append(rel_max_error)
+        metrics_dict["rel_mean_rt_error"].append(rel_mean_error)
         write_parameters_file(param_dict, res_path)
         write_metrics_per_cc(res_table, res_path)
         write_metric_txt(mae, rmse, mre, rel_max_error, rel_mean_error, res_path)
-
-        print ("The resuls written successfully! Exiting the program...")
-        sys.exit(0)
+        print("The resuls written successfully! Exiting the program...")
+    write_overall_results(metrics_dict, path2res)
+    sys.exit(0)

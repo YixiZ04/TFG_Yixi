@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from lightning import pytorch as pl
 from src.training.functions.splitted_sets_functions import *
-from src.training.functions.k_fold_functions import split_dataset_into_k_folds, save_cc_or_scaffold_kfolds, write_overall_results
+from src.training.functions.k_fold_functions import get_random_split_kfolds, save_random_split_kfolds, write_overall_results
 from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
 #K-Fold parameters
@@ -22,7 +22,7 @@ apply_grad_down_threshold = False                                               
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "dirname/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "random_split", "dirname/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
 
 
@@ -76,11 +76,10 @@ if __name__ == "__main__":
     print("Input data are successfully read. Making the output directory...")
     os.makedirs(path2res, exist_ok=True)
 
-    kfold_array = split_dataset_into_k_folds(input_df, OBJECTIVE_DICT, SIZE_DICT, "dir_id")
-    save_dir = os.path.join(path2input, "kfolds", "cc_split/")
+    kfold_array = get_random_split_kfolds(input_df, OBJECTIVE_DICT)
+    save_dir = os.path.join(path2input, "kfolds", "random_split/")
     os.makedirs(save_dir, exist_ok=True)
-    save_cc_or_scaffold_kfolds(kfold_array,"dir_id",  save_dir)
-    k = len(kfold_array)
+    save_random_split_kfolds(kfold_array, save_dir)
     metrics_dict = {
         "MAE": [],
         "RMSE":[],
@@ -88,6 +87,8 @@ if __name__ == "__main__":
         "rel_max_rt_error":[],
         "rel_mean_rt_error":[],
     }
+    k = len(kfold_array)
+
     for i in range(k):
         res_path = os.path.join (path2res, f"kfold_{i}/")
         test_df = kfold_array[i]
@@ -130,10 +131,10 @@ if __name__ == "__main__":
         test_pred = np.concatenate(test_pred, axis=0)
         res_table = get_res_table(test_df, test_pred, res_path, using_moldescs=using_moldescs)
         mae, rmse, mre ,rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
-        # This is new
+        # This is extra
         metrics_dict["MAE"].append(mae)
-        metrics_dict["RMSE"].append(rmse)
-        metrics_dict["MRE"].append(mre)
+        metrics_dict["RMSE"].append (rmse)
+        metrics_dict["MRE"].append (mre)
         metrics_dict["rel_max_rt_error"].append(rel_max_error)
         metrics_dict["rel_mean_rt_error"].append(rel_mean_error)
         write_parameters_file(param_dict, res_path)

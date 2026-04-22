@@ -27,10 +27,11 @@ from src.training.RepoRT.cc_split.perform_cc_splitting import cc_split
 from src.training.RepoRT.cc_scaffold_split.perform_cc_scaffold_split import cc_ms_split
 
 # DEFINE THE SEARCH SPACE FOR THE OPTIMIZATION
-num_trails = 2                                                                                  # This is the numbers of trials to run, set to 2 for demonstration purpose.
-dataset_type = "with_SMRT"                                                                      # Or "no_SMRT", depends on which dataset you want to use.
-split_type = "random_split"                                                                     # "cc_split", "scaffold_split", "cc_scaffold_split"
-input_dir = os.path.join (".", "data", "RepoRT_RP", "processed_data/", dataset_type, split_type + "_data/")
+num_trails = 2                                                                              # This is the numbers of trials to run, set to 2 for demonstration purpose.
+dataset_type = "no_SMRT"                                                                    # Or "no_SMRT", depends on which dataset you want to use.
+split_type = "random_split"                                                                 # "cc_split", "scaffold_split", "cc_scaffold_split"
+apply_low_grad_filter = False                                                               # Set to True if want to apply low gradient filter.
+input_dir = os.path.join (".", "data", "RepoRT_RP", "processed_data/", dataset_type, split_type + "/")
 path2res = os.path.join (".", "logs", "hpopting","RepoRT_RP", dataset_type, split_type, "dirname/" )  # This is the result path to save the results. Change it when run a hyperparameter optimization.
 
 def build_config (trial):
@@ -69,33 +70,28 @@ if __name__ == "__main__":
         print ("Building the input files...")
         match dataset_type:
             case "no_SMRT":
-                complete_processed_file = os.path.join (".", "data", "processed_RepoRT", "no_SMRT_no_ds_data.tsv")
+                complete_processed_file = os.path.join (".", "data", "RepoRT_RP","processed_data", "no_SMRT", "complete_processed_data.tsv")
                 drop_smrt = True
-                apply_upthreshold = False
             case "with_SMRT":
-                complete_processed_file = os.path.join (".", "data", "processed_RepoRT", "with_SMRT_ds_data.tsv")
+                complete_processed_file = os.path.join (".", "data", "RepoRT_RP", "processed_data","with_SMRT", "complete_processed_data.tsv")
                 drop_smrt = False
-                apply_upthreshold = True
             case _:
                 raise NameError (f"The dataset given: {dataset_type} is not correct! Please check again...")
         match split_type:
             case "random_split":
-            #@TODO revisar; la función es def split_train_val_test (input_path, output_dir, drop_smrt, apply_low_grad_filter); 
-                split_train_val_test(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_upthreshold=apply_upthreshold)
+                split_train_val_test(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_low_grad_filter=apply_low_grad_filter)
             case "cc_split":
-            #@TODO revisar; la función es def split_train_val_test (input_path, output_dir, drop_smrt, apply_low_grad_filter); 
-                cc_split(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_upthreshold=apply_upthreshold)
+                cc_split(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_low_grad_filter=apply_low_grad_filter)
             case "scaffold_split":
-            #@TODO revisar; la función es def split_train_val_test (input_path, output_dir, drop_smrt, apply_low_grad_filter); 
-                ms_split(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_upthreshold=apply_upthreshold)
+                ms_split(input_path = complete_processed_file, output_dir=input_dir, drop_smrt=drop_smrt, apply_low_grad_filter=apply_low_grad_filter)
             case "cc_scaffold_split":
-                cc_ms_split(ms_complete_file = os.path.join (".", "data", "processed_RepoRT", dataset_type, "scaffold_split_data/", "ms_complete_data.tsv"),
+                cc_ms_split(ms_complete_file = os.path.join (".", "data", "RepoRT_RP","processed_data", dataset_type, "ms_split/", "ms_complete_data.tsv"),
                             save_dir = input_dir,
                             random_seed =51,
                             processed_file=complete_processed_file,
                             drop_smrt=drop_smrt,
-                            apply_upthreshold=apply_upthreshold,
-                            save_complete_ms_dir=os.path.join (".", "data", "processed_RepoRT", dataset_type, "scaffold_split_data/"))
+                            apply_low_grad_filter=apply_low_grad_filter,
+                            save_complete_ms_dir=os.path.join (".", "data", "RepoRT_RP", "processed_data", dataset_type, "ms_split/"))
             case _:
                 raise NameError (f"The split type given: {split_type} is not correct! Please check again...")
     print ("Getting the input dataframes...")
@@ -118,8 +114,8 @@ if __name__ == "__main__":
 
     print ("Getting the DataLoaders...")
     train_loader, scaler, cc_shape = get_train_dataloader(train_df)
-    val_loader = get_test_val_loader(val_df, scaler)
-    test_loader = get_test_val_loader(test_df, scaler)
+    val_loader = get_val_loader(val_df, scaler, using_moldescs=False)
+    test_loader = get_test_loader(test_df,using_moldescs=False)
 
     print ("Running hyperparameter optimization...")
     study = optuna.create_study (direction = "minimize")
