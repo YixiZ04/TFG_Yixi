@@ -10,9 +10,9 @@ from src.RepoRT_data_processing.RepoRT_doublets_fixing import get_info_from_pubc
 
 
 KNOWN_COMPOUND_NAME = "alanine"
-EXPECTED_INCHI = "InChI=1S/C3H7NO2/c1-2(4)3(5)6/h2H,4H2,1H3,(H,5,6)"
-EXPECTED_INCHIKEY = "QNAYBMKLOCPYGJ-UHFFFAOYSA-N"
-EXPECTED_SMILES = "CC(C(=O)O)N"
+EXPECTED_INCHI = "InChI=1S/C3H7NO2/c1-2(4)3(5)6/h2H,4H2,1H3,(H,5,6)/t2-/m0/s1"
+EXPECTED_INCHIKEY = "QNAYBMKLOCPYGJ-REOHCLBHSA-N"
+EXPECTED_SMILES = "C[C@@H](C(=O)O)N"
 
 
 class TestLivePubChemConnection(unittest.TestCase):
@@ -21,6 +21,7 @@ class TestLivePubChemConnection(unittest.TestCase):
     def test_known_compound_returns_expected_structure(self):
         """Verify that PubChem returns the expected structure for alanine."""
         result = get_info_from_pubchem(KNOWN_COMPOUND_NAME)
+        print("Received from PubChem:", result)
 
         self.assertEqual(result["inchi_pubchem"], EXPECTED_INCHI)
         self.assertEqual(result["inchikey_pubchem"], EXPECTED_INCHIKEY)

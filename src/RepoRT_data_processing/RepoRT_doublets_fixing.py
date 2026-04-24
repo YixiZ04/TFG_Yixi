@@ -29,9 +29,9 @@ PUBCHEM_BASE_URL = (
     "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{name}/property/"
     "InChI,InChIKey,IsomericSMILES/JSON"
 )
-PUBCHEM_REQUEST_DELAY_SECONDS = 0.2
+PUBCHEM_REQUEST_DELAY_SECONDS = 1
 PUBCHEM_TIMEOUT_SECONDS = 30
-PUBCHEM_MAX_WORKERS = 3
+PUBCHEM_MAX_WORKERS = 1
 PUBCHEM_MAX_RETRIES = 5
 PUBCHEM_BACKOFF_SECONDS = 1.5
 
@@ -137,8 +137,6 @@ def request_pubchem_properties(compound_name):
 
     for attempt in range(PUBCHEM_MAX_RETRIES):
         try:
-            print(f"Attempt {attempt + 1} for PubChem query: '{compound_name}'")
-            print(f"Request URL: {url}")
             with urllib.request.urlopen(request, timeout=PUBCHEM_TIMEOUT_SECONDS) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             break
@@ -153,7 +151,7 @@ def request_pubchem_properties(compound_name):
     return {
         "inchi_pubchem": properties.get("InChI", ""),
         "inchikey_pubchem": properties.get("InChIKey", ""),
-        "smiles_pubchem": properties.get("IsomericSMILES", ""),
+        "smiles_pubchem": properties.get("SMILES", ""),
     }
 
 
@@ -417,5 +415,174 @@ def main():
     print(f"Enriched output written to: {ENRICHED_OUTPUT_PATH}")
 
 
+def has_failed_sanity_checks(row):
+    """Check if a row has any failed sanity checks.
+
+    Args:
+        row: A pandas Series representing a data row.
+
+    Returns:
+        True if sanity_check_formula or sanity_check_first_part_inchi is "no".
+    """
+    return (
+        row.get("sanity_check_formula") == "no" or
+        row.get("sanity_check_first_part_inchi") == "no"
+    )
+
+
+def get_pubchem_data_with_synonyms(compound_name):
+    """Get PubChem data for a compound name, trying synonyms if needed.
+
+    Args:
+        compound_name: Compound name to search in PubChem.
+
+    Returns:
+        A dictionary with PubChem InChI, InChIKey, and isomeric SMILES.
+        Returns empty dict if not found.
+    """
+    if pd.isna(compound_name) or not str(compound_name).strip():
+        return {}
+
+    # First try the compound name directly
+    try:
+        result = request_pubchem_properties(str(compound_name))
+        time.sleep(PUBCHEM_REQUEST_DELAY_SECONDS)
+        return {
+            "inchi": result.get("InChI", ""),
+            "inchikey": result.get("InChIKey", ""),
+            "smiles": result.get("SMILES", ""),
+        }
+    except (KeyError, IndexError, urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        pass
+
+    # If direct name fails, try to get synonyms and search those
+    try:
+        synonyms = get_pubchem_synonyms(str(compound_name))
+        for synonym in synonyms[:3]:  # Try up to 3 synonyms
+            try:
+                result = request_pubchem_properties(synonym)
+                time.sleep(PUBCHEM_REQUEST_DELAY_SECONDS)
+                return {
+                    "inchi": result.get("InChI", ""),
+                    "inchikey": result.get("InChIKey", ""),
+                    "smiles": result.get("SMILES", ""),
+                }
+            except (KeyError, IndexError, urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+                continue
+    except Exception:
+        pass
+
+    return {}
+
+
+def get_pubchem_synonyms(compound_name):
+    """Get synonyms for a compound from PubChem.
+
+    Args:
+        compound_name: Compound name to get synonyms for.
+
+    Returns:
+        A list of synonym strings.
+    """
+    encoded_name = urllib.parse.quote(compound_name, safe="")
+    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/synonyms/JSON"
+
+    for attempt in range(PUBCHEM_MAX_RETRIES):
+        try:
+            with urllib.request.urlopen(url, timeout=PUBCHEM_TIMEOUT_SECONDS) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code != 503 or attempt == PUBCHEM_MAX_RETRIES - 1:
+                return []
+            time.sleep(PUBCHEM_BACKOFF_SECONDS * (attempt + 1))
+    else:
+        return []
+
+    try:
+        synonyms = payload["InformationList"]["Information"][0]["Synonym"]
+        return [s for s in synonyms if s != compound_name][:10]  # Return up to 10 synonyms, excluding original name
+    except (KeyError, IndexError):
+        return []
+
+
+def update_row_from_pubchem(row, pubchem_data):
+    """Update a row with data from PubChem.
+
+    Args:
+        row: A pandas Series representing a data row.
+        pubchem_data: Dictionary with PubChem data.
+
+    Returns:
+        Updated row Series.
+    """
+    updated_row = row.copy()
+
+    if pubchem_data.get("smiles"):
+        updated_row["smiles.std"] = pubchem_data["smiles"]
+    if pubchem_data.get("inchi"):
+        updated_row["inchi.std"] = pubchem_data["inchi"]
+    if pubchem_data.get("inchikey"):
+        updated_row["inchikey.std"] = pubchem_data["inchikey"]
+
+    return updated_row
+
+
+def test_fix_doublets_first_two_lines():
+    """Unit test: Process first two lines from complete_doublets_sorted_inchi_pubchem.tsv.
+
+    Only processes lines where sanity checks failed, gets PubChem data with synonyms,
+    updates the rows, and writes to fixed_doublets.tsv.
+    """
+    input_path = Path(".", "data", "complete_doublets_sorted_inchi_pubchem.tsv")
+
+    if not input_path.exists():
+        print(f"Input file not found: {input_path}")
+        return
+
+    # Read the input file
+    df = read_tsv_file(input_path)
+
+    # Process only the first two rows
+    rows_to_process = df.head(2)
+    updated_rows = []
+
+    for idx, row in rows_to_process.iterrows():
+        print(f"Processing row {idx + 1}: {row['name']}")
+
+        if has_failed_sanity_checks(row):
+            print(f"  Row has failed sanity checks. Getting PubChem data...")
+
+            pubchem_data = get_pubchem_data_with_synonyms(row["name"])
+
+            if pubchem_data:
+                print(f"  Found PubChem data: SMILES={pubchem_data.get('smiles', '')[:30]}...")
+                updated_row = update_row_from_pubchem(row, pubchem_data)
+                updated_rows.append(updated_row)
+                print("  Row updated successfully")
+            else:
+                print("  No PubChem data found, keeping original row")
+                updated_rows.append(row)
+        else:
+            print("  Row passed sanity checks, keeping as-is")
+            updated_rows.append(row)
+
+    # Create output DataFrame
+    output_df = pd.DataFrame(updated_rows)
+
+    # Remove the sanity check columns as requested
+    columns_to_drop = ["INCHI Pubchem", "sanity_check_formula", "sanity_check_first_part_inchi"]
+    output_df = output_df.drop(columns=[col for col in columns_to_drop if col in output_df.columns])
+
+    # Write to fixed_doublets.tsv
+    output_path = Path(".", "data", "fixed_doublets.tsv")
+    write_results_tsv(output_df, output_path)
+
+    print(f"Test completed. Output written to: {output_path}")
+    print(f"Processed {len(rows_to_process)} rows, {len(updated_rows)} rows in output")
+
+
 if __name__ == "__main__":
-    main()
+    # Uncomment the line below to run the unit test instead of main()
+    test_fix_doublets_first_two_lines()
+    # main()
