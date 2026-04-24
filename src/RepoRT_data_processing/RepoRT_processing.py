@@ -39,7 +39,7 @@ SOURCE_PATH = os.path.join (".", "data", "RepoRT_RP", "processed_data/")
 PATH2INPUTS = os.path.join(".", "data", "RepoRT_RP", "preprocessed_data/")
 RT_INPUT = os.path.join(PATH2INPUTS, "preprocessed_rt_data.tsv")
 CC_INPUT = os.path.join(PATH2INPUTS, "preprocessed_cc_data.tsv")
-DOUBLET_THRESHOLD = 0.1
+DOUBLET_THRESHOLD = 0.05
 GRAD_INPUT = os.path.join(PATH2INPUTS, "preprocessed_gradient_data.tsv")
 GRAD2DROP_UP = 11
 GRAD2DROP_DOWN = 2
@@ -266,7 +266,7 @@ def _treat_doublets(only_doublet_df, path2save, doublet_threshold=DOUBLET_THRESH
             dropped_doublets_array.append(doublet)
         else:
             temp_row = doublet.iloc[[0]]
-            temp_row ["rt"] = doublet["rt"].mean()
+            temp_row ["rt"] = round(doublet["rt"].mean(),2)
             row_array.append (temp_row)
     treated_doublets = pd.concat(row_array, ignore_index=True)
     dropped_doublets = pd.concat(dropped_doublets_array, ignore_index=True)
@@ -469,5 +469,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-     get_processed_df_from_raw(drop_smrt=False,
+     get_processed_df_from_raw(drop_smrt=True,
                                down_grad_filter=False,)

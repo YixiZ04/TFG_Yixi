@@ -14,6 +14,9 @@ import numpy as np
 
 from sklearn.model_selection import KFold
 
+from chemprop import data, featurizers
+from rdkit.Chem import MolFromInchi
+
 # PARAMETERS FOR KFOLD
 
 K = 10                                                                          # By default, 5 folds will be made.
@@ -97,7 +100,72 @@ def split_dataset_into_k_folds(df, objective_dict, size_dict, column_name):
         final_array.append(temp_df)
     return final_array
 
-# Saving functions
+
+
+
+# Model_per_repo functions
+
+def mpr_get_train_loader (train_df):
+    """
+        This is different to any other similar functions. As it takes a TRAIN DataFrame only.
+        Also, the input data (metadata and gradient data) does not need scaling as they will be the same for all molecules.
+        Note: "mpr (Model Per Repo)"
+    """
+
+    rt_array = train_df.loc [:,["rt"]].values
+    inchi_array = train_df.loc[:, "inchi.std"].values
+
+    mols = [ MolFromInchi(inchi) for inchi in inchi_array]
+    all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
+
+    featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer ()
+    train_dset = data.MoleculeDataset(all_data[0], featurizer)
+    train_scaler = train_dset.normalize_targets()  # For the targets
+    train_loader = data.build_dataloader(train_dset,
+                                         num_workers=5,
+                                         shuffle=True,
+                                         seed=RANDOM_SEED)
+    return train_loader, train_scaler
+
+def mpr_get_val_loader (val_df, train_scaler):
+    """
+        Same as the previous function's description
+    """
+    rt_array = val_df.loc[:, ["rt"]].values
+    inchi_array = val_df.loc[:, "inchi.std"].values
+
+    mols = [MolFromInchi(inchi) for inchi in inchi_array]
+    all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
+
+    featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
+    val_dset = data.MoleculeDataset(all_data[0], featurizer)
+
+    val_dset.normalize_targets(train_scaler)  # Here this is normalized with the train_scaler.
+    val_loader = data.build_dataloader(val_dset,
+                                        num_workers=5,
+                                        shuffle=False)
+    return val_loader
+
+def mpr_get_test_loader (test_df):
+    """
+        See description for function "mpr_get_train_loader".
+        The targets are not scaled.
+    """
+    rt_array = test_df.loc[:, ["rt"]].values
+    inchi_array = test_df.loc[:, "inchi.std"].values
+
+    mols = [MolFromInchi(inchi) for inchi in inchi_array]
+    all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
+
+    featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
+    test_dset = data.MoleculeDataset(all_data[0], featurizer)
+
+    test_loader = data.build_dataloader(test_dset,
+                                        num_workers=5,
+                                        shuffle=False)
+    return test_loader
+
+# Save folds function. NOT APPLIED TO "model_per_repo" as we have no interest in saving ALL FOLDS.
 
 def _write_cc_or_scaffold_report (fold_df,column_name,  path2dir, filename):
     """
@@ -114,7 +182,7 @@ def _write_cc_or_scaffold_report (fold_df,column_name,  path2dir, filename):
 
     with open(path2file, "w") as f:
         f.write (f"The unique values contained in this fold are:\n")
-        f.writelines (f"{unique_value}: {size} molecules\n " for unique_value, size in unique_size_dict.items())
+        f.writelines (f"{unique_value}: {size} molecules\n" for unique_value, size in unique_size_dict.items())
     return
 
 def save_random_split_kfolds (df_array, path2dir):
@@ -165,6 +233,7 @@ def write_overall_results (result_dict, path2output):
     """
         This function summarizes the results from all 10 runs into a single dataframe and saved in a .tsv file.
         Also, another .tsv file is written with the mean and standard deviation for each metric.
+
     """
     k = len(result_dict["MAE"])
     summarized_df = pd.DataFrame (result_dict, index=([f"run_{i}" for i in range(1, k+1)]))
@@ -186,9 +255,73 @@ def write_overall_results (result_dict, path2output):
     summarized_df.to_csv (path2summirized_file, sep='\t')
 
 
+def _calculate_all_metrics (df):
+    """
+        This is a helper function to calculate all weighted metrics.
+        Returns a dataframe with dir_id and all the weighted metrics.
+    """
+    weights= df["n_molecules"]
+    mean_mae = np.average(df["MAE"], weights= weights)
+    std_mae = np.sqrt(np.average((df["MAE"] - mean_mae)**2 , weights=weights))
+    mean_rmse = np.average(df["RMSE"], weights= weights)
+    std_rmse = np.sqrt(np.average((df["RMSE"] - mean_rmse)**2, weights= weights))
+    mean_mre = np.average(df["MRE"], weights= weights)
+    std_mre = np.sqrt(np.average((df["MRE"] - mean_mre)**2, weights= weights))
+    mean_rel_max_rt_error = np.average(df["rel_max_rt_error"], weights= weights)
+    std_rel_max_rt_error = np.sqrt(np.average((df["rel_max_rt_error"] - mean_rel_max_rt_error) **2, weights= weights))
+    mean_rel_mean_rt_error = np.average(df["rel_mean_rt_error"], weights= weights)
+    std_rel_mean_rt_error = np.sqrt(np.average((df["rel_mean_rt_error"] - mean_rel_mean_rt_error) **2, weights= weights))
+
+    metric_row_df = pd.DataFrame ({"mean_MAE":[mean_mae],
+                                  "std_MAE":[std_mae],
+                                  "mean_RMSE":[mean_rmse],
+                                  "std_RMSE":[std_rmse],
+                                  "mean_MRE":[mean_mre],
+                                  "std_MRE":[std_mre],
+                                  "mean_rel_max_rt_error":[mean_rel_max_rt_error],
+                                  "std_rel_max_rt_error":[std_rel_max_rt_error],
+                                  "mean_rel_mean_rt_error":[mean_rel_mean_rt_error],
+                                  "std_rel_mean_rt_error":[std_rel_mean_rt_error],
+                                   })
+
+    return metric_row_df
 
 
 
+def write_model_per_repo_results (results_df, path2output):
+    """
+        Here 2 different metrics are calculated. The mean and std deviation for each dir_id using the metric value from the Folds.
+        The aggregated metric (weighted mean and std deviation) using the value calculated from all folds and weighted by the molecule count for each repo.
+    """
+
+    print(f"Saving the results in {path2output}...")
+
+    # Save the input df first.
+
+    path2allfolds_table = os.path.join (path2output, "all_folds.tsv")
+    results_df.to_csv (path2allfolds_table, sep='\t', index=False)
+
+    # Make the metric_per_cc file
+
+    temp_array = []
+    dir_id_array = np.unique (results_df["dir_id"])
+    for dir_id in dir_id_array:
+        temp_df = results_df[results_df["dir_id"] == dir_id]
+        temp_res_df = _calculate_all_metrics(temp_df)
+        temp_array.append(temp_res_df)
+
+    metric_per_repo_df = pd.concat(temp_array, ignore_index=True)
+    metric_per_repo_df.insert(0, "dir_id", dir_id_array)
+    path2metricperrepo_table = os.path.join (path2output, "metric_per_cc.tsv")
+    metric_per_repo_df.to_csv(path2metricperrepo_table, sep='\t', index=False)
+
+    # The aggregated metric file.
+
+    all_df = _calculate_all_metrics (results_df)
+    path2alldf_table = os.path.join(path2output, "aggregated_results.tsv")
+    all_df.to_csv(path2alldf_table, sep='\t', index=False)
+
+    print (f"All metric files are written and saved in {path2output}")
 
 if __name__ == "__main__":
     SIZE_DICT = {f"k-fold{fold_index}": 0 for fold_index in range(1, K + 1)}  # This will store the size of each split
@@ -196,5 +329,6 @@ if __name__ == "__main__":
                       range(1, K + 1)}  # This will store the cc or murcko scaffold
     path2input = os.path.join(".", "data", "RepoRT_RP", "processed_data", "no_SMRT","complete_processed_data.tsv")
     df = pd.read_csv (path2input, sep="\t")
-    res_array = get_random_split_kfolds(df, OBJECTIVE_DICT)
+    res_array = split_dataset_into_k_folds(df,  OBJECTIVE_DICT, SIZE_DICT,"dir_id")
+    save_cc_or_scaffold_kfolds(res_array,"dir_id","./")
 
