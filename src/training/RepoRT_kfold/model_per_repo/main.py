@@ -105,7 +105,7 @@ if __name__ == "__main__":
         "rel_max_rt_error": [],
         "rel_mean_rt_error": [],
     }
-    for dir_id in dir_id_array[:1]:
+    for dir_id in dir_id_array:
         temp_df = input_df[input_df["dir_id"] == dir_id]
         kfold_array = []
         temp_df_kf = KFold(n_splits=10,
