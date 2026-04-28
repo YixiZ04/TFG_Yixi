@@ -21,12 +21,12 @@ from pathlib import Path
 from lightning import pytorch as pl
 from src.training.functions.basic_model_functions import write_metric_txt, metrics_from_dataframe, write_parameters_file
 from src.training.functions.moldesc_model_functions import *
-from src.get_molecular_descriptors.get_molecular_descriptors import add_columns2df
 
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
 
-input_file = Path(os.path.join(".", "data", "SMRT", "SMRT_data_moldesc.tsv"))           # Be sure its existence.
+input_file = Path(os.path.join(".", "data", "SMRT", "SMRT_data.csv"))           # Be sure its existence.
+path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 path2res = os.path.join(".", "logs", "SMRT","moldesc", "dirname/")              # Change the dirname for each trial
 param_dict = {
     "mp_hidden_dim": 300,                                                       # Hidden dimension of the message passing (MP) part
@@ -49,9 +49,9 @@ param_dict = {
 if __name__ == "__main__":
     pl.seed_everything(42, workers=True)
     print(f"Check for the dataset given...")
-    if not input_file.exists():
-        add_columns2df(path2dataset= "./data/no_extra_mol_desc/SMRT_data.csv", dataset="SMRT")
-    df = pd.read_csv(input_file, sep="\t")
+    df = pd.read_csv(input_file, sep=";")
+    moldesc_df = pd.read_csv(path2moldesc, sep="\t")
+    df = pd.merge (df, moldesc_df, on="inchi", how="inner")
     # df = df.sample (500)        #Run this if want a quick test for usage
     print(f"Making the result directory...")
     os.makedirs(path2res, exist_ok=True)

@@ -17,19 +17,36 @@ Molecular descriptors for both RepoRT and SMRT will be fetched from this df usin
 whose information has already been fetched, thus accelerating the process.
 Note: this dataframe has already been built and come with this repository. Only need to run this script if there were any updates.
 """
-# 0. Import modules
+
+# Import modules
+
+import os
+
 import pubchempy as pcp
 import numpy as np
 import pandas as pd
+
 from pathlib import Path
+
+from rdkit.Chem import MolFromInchi
+from rdkit.Chem.Crippen import MolLogP
+from rdkit.Chem.Descriptors import ExactMolWt
+
 from src.RepoRT_data_processing.RepoRT_get_raw_data import merge_complete_file
 
+# Parameters
 
-# 1. Define the functions
-def build_mol_desc_dict_from_inchi (path2raw_report="./data/no_extra_mol_desc/RepoRT_complete_data.tsv", save_file ="./data/with_extra_mol_desc/extra_mol_descs.tsv"):
+RAW_REPORT_FILE = os.path.join (".", "data", "RepoRT", "raw_data", "raw_rt_data.tsv")
+PATH2FILE = os.path.join (".", "data", "moldescs.tsv")
+PATH2COMPLETE_FILE = os.path.join (".", "data", "complete_moldesc.tsv")
+
+# Define the functions
+def _pubchem_moldesc_query (path2raw_report=RAW_REPORT_FILE,
+                            save_file = PATH2FILE) -> None:
     """
-    Inputs: path2raw_report = The path to the RepoRT raw file (containing all information), the path to the file for saving the dataframe.
-    Output: The dataframe saved in the indicated path.
+        This function can be used as the first part to complete the initial moldesc fetching.
+        Finally, this function writes a .tsv files containing 3 columns: Inchi, monoisotopic_mass, xlogp.
+        This function has been defined as PubChem uses a slightly better algorithm (XLogP 3.0) than RDkit.
     """
     # Check if the raw RepoRT datafile exists first, if not it is built.
     if not Path(path2raw_report).exists():
@@ -58,40 +75,34 @@ def build_mol_desc_dict_from_inchi (path2raw_report="./data/no_extra_mol_desc/Re
                              "mono_iso_mass": mono_mw_dict.values(),
                              "xlogp": xlogp_dict.values()})
     final_df.to_csv (save_file, sep = "\t", index=False)
-    return
 
-def add_columns2df (path2dataset, dataset, save_path = "./data/with_extra_mol_desc/",path2moldesc = "./data/with_extra_mol_desc/extra_mol_descs.tsv"):
-    """
-    Inputs: Path to the dataset (SMRT, RepoRT_all, RepoRT_only_mol). Which dataset should be used (SMRT,RepoRT_all, RepoRT_only_mol) and the path used for saving the df of molecular descriptors.
-    Output: An updated dataframe containing the molecular descriptors.
-    """
-    # By running this function if the extra_mol_desc.tsv file is not found it will be built, but should not be the case.
-    if not Path (path2moldesc).exists():
-        build_mol_desc_dict_from_inchi()
-    moldesc_df = pd.read_csv(path2moldesc, sep="\t")
-    save_filename = f"{save_path}{dataset}_extra_mol_descs.tsv"
-    if dataset == "SMRT":
-        data_df = pd.read_csv(path2dataset, sep=";")
-        final_df = pd.merge (data_df, moldesc_df, on="inchi", how = "inner")
-        final_df = final_df.dropna ()
-        final_df.to_csv (save_filename, sep = "\t", index = False)
-        return
-    elif dataset == "RepoRT_all" or dataset == "RepoRT_only_mol":
-        data_df = pd.read_csv(path2dataset, sep="\t")
-        temp_df = pd.merge(data_df, moldesc_df, left_on = "inchi.std", right_on="inchi", how = "inner")
-        # "Cut and paste action"
-        temp_mass_serie = temp_df.pop ("mono_iso_mass")
-        temp_xlog_serie = temp_df.pop ("xlogp")
-        position = temp_df.columns.get_loc ("rt_s")
-        temp_df.insert (position + 1, "mono_iso_mass", temp_mass_serie)
-        temp_df.insert (position + 2, "xlogp", temp_xlog_serie)
-        final_df = temp_df.dropna (subset=["mono_iso_mass", "xlogp"])
-        final_df = final_df.drop (columns = ["inchi"])
-        final_df.to_csv (save_filename, sep = "\t", index = False)
-    else:
-        print (f"The dataset introduced: {dataset} is not correct")
-        return
 
-# This could be used if wanted to get the complete RepoRT raw dataset with mol descs.
-# if __name__ == "__main__":
-#     add_columns2df("./data/no_extra_mol_desc/RepoRT_complete_data.tsv", "RepoRT_all")
+def complete_moldesc_query (initial_file = PATH2FILE,
+                            path2res = PATH2COMPLETE_FILE)-> None:
+    """
+        This function requires an initial file, containing inchi and moldescs fetched with PubChem.
+        If not exists, it will be built.
+        This completes the moldesc search by using RDkit, and writes another .tsv file.
+    """
+
+    # Check for the initial dataframe
+    if not Path (initial_file).exists():
+        _pubchem_moldesc_query()
+
+    df = pd.read_csv (initial_file, sep="\t")
+
+    for index, row in df.iterrows():
+        if pd.isnull (row["mono_iso_mass"]) or pd.isnull (row["xlogp"]):
+            inchi = row["inchi"]
+            mol = MolFromInchi(inchi, sanitize=False)
+            mol_wt = ExactMolWt (mol)
+            logp = MolLogP(mol)
+            df.loc[index, "mono_iso_mass"] = round(mol_wt, 9)
+            df.loc[index, "xlogp"] = round(logp, 1)
+        else:
+            continue
+    df.to_csv (path2res, sep = "\t", index=False)
+
+if __name__ == "__main__":
+    complete_moldesc_query()
+

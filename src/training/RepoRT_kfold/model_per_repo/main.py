@@ -29,12 +29,12 @@ RANDOM_SEED = 42
 # DEFINE PARAMETERS
 SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
 dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
-apply_grad_down_threshold = False                                                      # Set to True if want to use the filtered by grad_down_threshold
+apply_grad_down_threshold = False                                                     # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_23_04_2026/") #Change "dirname" for any name you want.
-path2moldesc = os.path.join (".", "data", "with_extra_mol_desc", "extra_mol_descs.tsv")
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_28_04_2026/") #Change "dirname" for any name you want.
+path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
 param_dict = {
