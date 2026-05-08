@@ -20,9 +20,9 @@ SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")         
 dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
 apply_grad_down_threshold = False                                                      # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = True                                                                      # Set to True if want to use molecular descriptors for the model
+using_moldescs = True                                                                  # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "01_28_04_2026/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "prueba/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "complete_moldesc.tsv")
 
 
@@ -76,10 +76,10 @@ if __name__ == "__main__":
     print("Input data are successfully read. Making the output directory...")
     os.makedirs(path2res, exist_ok=True)
 
-    kfold_array = split_dataset_into_k_folds(input_df, OBJECTIVE_DICT, SIZE_DICT, "dir_id")
+    kfold_array = split_dataset_into_k_folds(input_df, OBJECTIVE_DICT, SIZE_DICT, "cc_id")
     save_dir = os.path.join(path2input, "kfolds", "cc_split/")
     os.makedirs(save_dir, exist_ok=True)
-    save_cc_or_scaffold_kfolds(kfold_array,"dir_id",  save_dir)
+    save_cc_or_scaffold_kfolds(kfold_array,"cc_id",  save_dir)
     k = len(kfold_array)
     metrics_dict = {
         "MAE": [],
@@ -90,14 +90,14 @@ if __name__ == "__main__":
     }
     for i in range(k):
         res_path = os.path.join (path2res, f"kfold_{i}/")
-        test_df = kfold_array[i]
-        val_df = kfold_array[(i + 1) % k]
+        test_df = kfold_array[i].sample(10)
+        val_df = kfold_array[(i + 1) % k].sample(10)
         train_df = [
             kfold_array[j]
             for j in range(k)
             if j != i and j != (i + 1) % k
         ]
-        train_df = pd.concat(train_df, ignore_index=True)
+        train_df = pd.concat(train_df, ignore_index=True).sample(100)
         if using_moldescs:
             print ("Scaling the molecular descriptors...")
             train_df = add_moldescs(train_df, path2moldesc)

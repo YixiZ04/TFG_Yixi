@@ -1,13 +1,16 @@
 """
-    Name: data_processing.py
+    Name: RepoRT_processing.py
     Author: Yixi Zhang
-    Version: 1.2.
-    Description: This performsthe processing on preprocessed RepoRT data. This process is done as shown in the following:
+    Description:
+    This includes a processing for duplicated chromatography conditions. Those who share the same cc is unified into another unique id;
+    and all the processing is done using the new unique ID.
+    NOTE: The repeated molecules are considered as "doublets" within the new id.
+    This performs the processing on preprocessed RepoRT data:
         1. Eliminates columns that are not useful. Such as comment, classyfires columns.
-        (The molecule name is not eliminated as this can be useful for later to identify the molecules easier).
-        2. Drop those molecules having > 10 gradients and  those having < 3 segments
+        (The molecule name is not eliminated as it can be useful for later to identify the molecules easier).
+        2. Drop those molecules having > 12 segments gradients and  those having < 3 segments
         3. Drop those repos that contains < 100 molecules.
-        3. Get max and mean RT for each repository, merge them to each molecule according the dir_id.
+        3. Get max and mean RT for each repository, merge them to each molecule according the dir_id (**cc_id)
     Update: Rectified a concept error here, as the final result table should not be scaled, and the scaling process will be done after data splitting using train set Scaler
     Also, on top of the previous update, here more options are given:
         1. Drop completely the SMRT dataset and apply down_threshold. (Drop datasets if contains less molecules than the threshold).
@@ -31,16 +34,21 @@ import numpy as np
 from pathlib import Path
 
 from src.RepoRT_data_processing.RepoRT_preprocessing import get_preprocessed_datatable
+from src.RepoRT_data_processing.RepoRT_get_raw_data import merge_complete_file
 
 
 # VARIABLES
 
 SOURCE_PATH = os.path.join (".", "data", "RepoRT_RP", "processed_data/")
 PATH2INPUTS = os.path.join(".", "data", "RepoRT_RP", "preprocessed_data/")
-RT_INPUT = os.path.join(PATH2INPUTS, "preprocessed_rt_data.tsv")
-CC_INPUT = os.path.join(PATH2INPUTS, "preprocessed_cc_data.tsv")
+PATH2RAW_RT = os.path.join (".", "data", "RepoRT_RP", "raw_data", "raw_rt_data.tsv")
+PATH2RAW_CC = os.path.join (".", "data", "RepoRT_RP", "raw_data", "raw_cc_data.tsv")
+PATH2RAW_GRAD = os.path.join (".", "data", "RepoRT_RP", "raw_data", "raw_grad_data.tsv")
+PATH2RT= os.path.join(PATH2INPUTS, "preprocessed_rt_data.tsv")
+PATH2CC = os.path.join(PATH2INPUTS, "preprocessed_cc_data.tsv")
+PATH2GRAD = os.path.join(PATH2INPUTS, "preprocessed_gradient_data.tsv")
+DROP_REPO = ["0093", "0150", "0434", "0435"]
 DOUBLET_THRESHOLD = 0.05
-GRAD_INPUT = os.path.join(PATH2INPUTS, "preprocessed_gradient_data.tsv")
 GRAD2DROP_UP = 11
 GRAD2DROP_DOWN = 2
 MOL_FILTER_DOWN = 100
@@ -49,11 +57,32 @@ MOL_FILTER_UP = 5000
 
 #HELPER FUNCTIONS
 
-def _get_input_df (rt_input = RT_INPUT,
-                   cc_input = CC_INPUT,
-                   grad_input = GRAD_INPUT):
+def _get_raw_input_df (rt_input,
+                       cc_input,
+                       grad_input):
     """
-        This function checks for the input files and loads then as pd.DataFrames
+        To fetch the raw df for duplicated cc check. Otherwise, it does not work...
+    """
+    print("Cheking for the input files...")
+    if (not Path(rt_input).exists() or
+        not Path(cc_input).exists() or
+        not Path(grad_input).exists()):
+        merge_complete_file()
+    else:
+        print("The input files exists!")
+
+    print("Fetching the input tables...")
+    rt_df = pd.read_csv(rt_input, sep='\t', dtype={"dir_id": str})
+    cc_df = pd.read_csv(cc_input, sep='\t', dtype={"dir_id": str}).fillna(-1)
+    grad_df = pd.read_csv(grad_input, sep='\t', dtype={"dir_id": str}).fillna(0)
+
+    return rt_df, cc_df, grad_df
+
+def _get_input_df (rt_input = PATH2RT,
+                   cc_input = PATH2CC,
+                   grad_input = PATH2GRAD):
+    """
+        This function checks for the input files and loads then as pd.DataFrames.
     """
     print ("Cheking for the input files...")
     if (not Path(rt_input).exists() or
@@ -127,15 +156,15 @@ def _write_dropped_grad_up_filter_report(dropped_grad_array, path2dir, filename,
 
 def _write_complete_info_report(complete_df, path2dir, filename):
     """
-        This function writes an report containing 2 informations:
+        This function writes a report containing 2 information:
             - The molecule count.
             - The directories contained
     """
     n_molecules = len(complete_df)
-    repos = complete_df["dir_id"].unique()
+    repos = complete_df["cc_id"].unique()
     size_dict = {}
     for repo in repos:
-        temp_df = complete_df[complete_df["dir_id"] == repo]
+        temp_df = complete_df[complete_df["cc_id"] == repo]
         size_dict[repo] = len(temp_df)
 
     path2file = os.path.join(path2dir, "report_files",filename)
@@ -144,13 +173,187 @@ def _write_complete_info_report(complete_df, path2dir, filename):
         f.write(f"The directory contained in this dataset are:\n")
         f.writelines(f"{index}: {size}\n" for index, size in size_dict.items())
 
-# DEFINE FUNCTIONS
+
+## Check Duplicated cc, and get the dir_ids array
+
+def _get_duplicated_entrees(df, droppped_repo) -> pd.DataFrame:
+    """
+        Gets the duplicated entrees from a dataframe.
+        Drops some dir_ids for inconsistencies.
+    """
+
+    temp_df = df.copy()
+    duplicated_df = temp_df[temp_df.duplicated(subset=temp_df.columns[1:], keep=False)]
+    final_df = duplicated_df[~duplicated_df["dir_id"].isin(droppped_repo)]
+
+    return final_df
+
+
+def _group_up_by_conditions(df) -> list:
+    """
+       Gets an array contains dataframes for the same chromatography conditions.
+       Output: Array of dataframes
+    """
+    columns2use = list(df.columns[1:])
+
+    grouped_df = df.groupby(by=columns2use)
+    final_array = []
+    for _, same_cc_df in grouped_df:
+        final_array.append(same_cc_df)
+
+    return final_array
+
+
+def _get_repeated_condition_df(df_array) -> pd.DataFrame:
+    """
+        Saves a .tsv file containing the repeated conditions + dir_ids
+    """
+    temp_dict = {
+        "repeated_conditions": [],
+        "dir_ids": [],
+    }
+    for index, df in enumerate(df_array):
+        temp_dict["repeated_conditions"].append(index)
+        temp_dict["dir_ids"].append(df.loc[:, "dir_id"].values)
+
+    final_df = pd.DataFrame(temp_dict)
+
+    return final_df
+
+
+def _get_duplicated_dirids (cc_grad_df,
+                            dropped_repo) -> list:
+    """
+        Get a 2D array containing the dir_ids for a same cc.
+    """
+
+    duplicated_ccs = _get_duplicated_entrees(cc_grad_df, dropped_repo)
+    grouped_array = _group_up_by_conditions(duplicated_ccs)
+
+    final_df = _get_repeated_condition_df(grouped_array)
+    duplicated_dirid_array = list(final_df.loc[:, "dir_ids"].values)
+    return duplicated_dirid_array
+
+def _flat_2d_array (array) -> list:
+    """
+        Flattens a 2D array into a 1D array.
+        This does list by list, not row-wise.
+    """
+    return [item for sublist in array for item in sublist]
+
+def _get_all_dirid (df,
+                    duplicated_dirids_array) -> list:
+    """
+        Make the final 2D array containing all the repeated and not repeated array
+    """
+    flat_array = _flat_2d_array(duplicated_dirids_array)
+    dir_id_array = np.unique (df.loc[:,"dir_id"].values)
+
+    for dir_id in dir_id_array:
+        if dir_id not in flat_array:
+            duplicated_dirids_array.append([dir_id])
+
+    return list(duplicated_dirids_array)
+
+def _merge_same_cc_rt (df,
+                       duplicated_dirids_array,
+                       drop_repos) -> tuple [pd.DataFrame, pd.DataFrame]:
+    """
+        Eliminates the dir_id column and substitute it by cc_id.
+        Also returns another df indicating the corresponding dir_id to a cc_id.
+        This last df is considered to be the mapping df, will be used later to ensure the cc_id is
+        consistent in both cc_df and grad_df
+    """
+    temp_array = []
+    temp_dict = {"cc_id":[],
+                 "dir_ids":[]}
+    dir_ids_array = _get_all_dirid(df,
+                                   duplicated_dirids_array)
+
+    for index, dir_ids in enumerate(dir_ids_array):
+        temp_df = df[df["dir_id"].isin(dir_ids)]
+        if len(temp_df) > 0:
+            temp_cc_id_array = [ f"cc_{index}" for _ in range(len(temp_df))]
+            temp_df.insert(0, "cc_id", temp_cc_id_array)
+            temp_array.append(temp_df)
+            temp_dict ["cc_id"].append(f"cc_{index}")
+            temp_dict ["dir_ids"].append(list(dir_ids))
+
+    temp_df = pd.concat(temp_array, ignore_index=True)
+    final_df = temp_df[~temp_df ["dir_id"].isin(drop_repos)].copy()
+    final_df.drop("dir_id", axis=1, inplace=True)
+
+    return final_df, pd.DataFrame(temp_dict)
+
+def _map_cc_id2df (df,
+                   mapping_df,
+                   drop_repos) -> pd.DataFrame:
+    """
+        To ensure the same cc_id on the same original dir_ids, the df obtained with the previous function
+        is used for this.
+    """
+
+    exploded_df = mapping_df.explode("dir_ids") # Needed as it is a list
+
+    temp_df = pd.merge (df,
+                        exploded_df,
+                        left_on="dir_id",
+                        right_on="dir_ids",
+                        how="inner")
+
+    temp_df.drop_duplicates(subset="cc_id", inplace=True)
+    final_df = temp_df[~temp_df["dir_id"].isin(drop_repos)].copy()
+
+    final_df.drop(columns=["dir_id", "dir_ids"],  inplace=True)
+    column2move = final_df.pop("cc_id")
+    final_df.insert(0, "cc_id", column2move)
+
+
+    return final_df
+
+
+def _duplicated_cc_main (path2raw_rt,
+                         path2raw_cc,
+                         path2raw_grad,
+                         rt_df,
+                         cc_df,
+                         grad_df,
+                         drop_repos,
+                         path2res) -> tuple [pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+        Need raw datatables as inputs, otherwise, the duplicated cc are not checked.
+        This function performs the very first processing for the data: group up the data with the same cc
+        and substitutes them with a new unique id: "cc_id"
+        Also a .tsv file is saved in the path indicated to see the corresponding dir_ids for a cc_id.
+        The output dfs of this function are used for later processing.
+    """
+    raw_rt_df, raw_cc_df, raw_grad_df = _get_raw_input_df(path2raw_rt,
+                                                          path2raw_cc,
+                                                          path2raw_grad)
+    cc_grad_df = pd.merge (raw_cc_df,
+                           raw_grad_df,
+                           on="dir_id",
+                           how="inner")
+
+    duplicated_dirids = _get_duplicated_dirids(cc_grad_df,drop_repos)
+
+    non_duplicated_rt_df,cc_id_dirid_df  = _merge_same_cc_rt(rt_df, duplicated_dirids,drop_repos)
+    non_duplicated_cc_df = _map_cc_id2df(cc_df, cc_id_dirid_df,drop_repos)
+    non_duplicated_grad_df = _map_cc_id2df(grad_df, cc_id_dirid_df,drop_repos)
+
+    path2file = os.path.join (path2res, "cc_id_vs_dir_id.tsv")
+    cc_id_dirid_df.to_csv(path2file,sep='\t', index=False)
+
+    return non_duplicated_rt_df, non_duplicated_cc_df, non_duplicated_grad_df
+
+
+# PROCESS RT DATA
 def _drop_rt_columns (rt_df,
                       path2dir):
     """
         Input: preprocessed df from RepoRT.
         Output: Updated df with only useful columns, dropped columns:
-        ["comment", "inchikey.std", all columns containing "classyfire."]
+        ["comment", "inchikey.std", all columns containing "classyfire"]
     """
     columns_to_drop = ["comment", "inchikey.std"]
     for column in rt_df.columns:
@@ -168,11 +371,11 @@ def _filer_by_down_threshold (rt_df,
         This function eliminates those repos containing less than the threshold molecules, which is set to 100 molecules as default
     """
 
-    index_array = np.unique(rt_df["dir_id"])
+    index_array = np.unique(rt_df["cc_id"])
     final_df_array, dropped_array = [], []
 
     for index in index_array:
-        temp_df = rt_df[rt_df["dir_id"]==index]
+        temp_df = rt_df[rt_df["cc_id"]==index]
         if len(temp_df) >= threshold:
             final_df_array.append(temp_df)
         else:
@@ -194,10 +397,10 @@ def _downsample(rt_df,
         This function performs downsampling on RepoRT data and writes a report file for it.
         As these should be applied after filtering by down_threshold, all the repo < up_threshold contains >100 molecules
     """
-    index_array =  rt_df["dir_id"].unique()
+    index_array =  rt_df["cc_id"].unique()
     final_df, ds_repos = [], []
     for index in index_array :
-        temp_df = rt_df[rt_df["dir_id"] == index]
+        temp_df = rt_df[rt_df["cc_id"] == index]
         if  temp_df.shape[0] < up_threshold:
             final_df.append (temp_df)
         else:
@@ -214,9 +417,9 @@ def _get_max_mean_rt_per_cc (rt_df):
         Updates the input_dataframe.
     """
     max_array, mean_array = [], []
-    index_array = np.unique (rt_df["dir_id"])
+    index_array = np.unique (rt_df["cc_id"])
     for index in index_array:
-        temp_df = rt_df [rt_df ["dir_id"] == index]
+        temp_df = rt_df [rt_df ["cc_id"] == index]
         mean_rt = np.mean (temp_df["rt"])
         max_rt = np.max (temp_df["rt"])
         temp_max_array = [ max_rt for _ in range (temp_df.shape[0])]
@@ -237,8 +440,8 @@ def _find_doublets(rt_df, path2dir):
             - A df without any doublets at all
             - A df containing only doublets
     """
-    no_doublets_df = rt_df [~rt_df.duplicated(subset=["dir_id", "smiles.std"], keep=False)]
-    doublets_df = rt_df [rt_df.duplicated(subset=["dir_id", "smiles.std"], keep=False)]
+    no_doublets_df = rt_df [~rt_df.duplicated(subset=["cc_id", "smiles.std"], keep=False)]
+    doublets_df = rt_df [rt_df.duplicated(subset=["cc_id", "smiles.std"], keep=False)]
     path2file = os.path.join(path2dir, "doublets.tsv")
     doublets_df.to_csv(path2file, sep="\t", index=False)
 
@@ -257,7 +460,7 @@ def _treat_doublets(only_doublet_df, path2save, doublet_threshold=DOUBLET_THRESH
     """
     row_array = []
     dropped_doublets_array = []
-    grouped_df = only_doublet_df.groupby (["dir_id", "smiles.std"])
+    grouped_df = only_doublet_df.groupby (["cc_id", "smiles.std"])
     for _,doublet in grouped_df:
         diff = doublet["rt"].max() - doublet["rt"].min()
         # Should not be a problem, as the max_rt should be the same for a repo
@@ -266,7 +469,7 @@ def _treat_doublets(only_doublet_df, path2save, doublet_threshold=DOUBLET_THRESH
             dropped_doublets_array.append(doublet)
         else:
             temp_row = doublet.iloc[[0]]
-            temp_row ["rt"] = round(doublet["rt"].mean(),2)
+            temp_row ["rt"] = doublet["rt"].mean()
             row_array.append (temp_row)
     treated_doublets = pd.concat(row_array, ignore_index=True)
     dropped_doublets = pd.concat(dropped_doublets_array, ignore_index=True)
@@ -343,7 +546,7 @@ def _drop_grad_data_by_down_threshold(grad_df,
     """
     threshold_column = f"t [min]_{down_threshold}"
     final_df = grad_df[grad_df[threshold_column].notna()]
-    dropped_repos = grad_df.loc [~grad_df["dir_id"].isin(final_df["dir_id"]), "dir_id"].values
+    dropped_repos = grad_df.loc [~grad_df["cc_id"].isin(final_df["cc_id"]), "cc_id"].values
 
     _write_dropped_grad_down_filter_report(dropped_repos,
                                            path2dir,
@@ -362,7 +565,7 @@ def _drop_grad_data_by_up_threshold (grad_df,
     threshold_column = f"t [min]_{up_threshold}"
     previous_column = f"D [%]_{up_threshold-1}"
     final_df = grad_df[grad_df[threshold_column].isna()].loc[:, :previous_column]
-    dropped_repos = grad_df.loc [~grad_df["dir_id"].isin(final_df["dir_id"]), "dir_id"].values
+    dropped_repos = grad_df.loc [~grad_df["cc_id"].isin(final_df["cc_id"]), "cc_id"].values
     _write_dropped_grad_up_filter_report(dropped_repos,
                                          path2dir,
                                          "Report_upfiltering.txt")
@@ -400,8 +603,8 @@ def _get_complete_processed_data (rt_df, cc_df, grad_df, path2dir):
         This functions performs an inner join to all three dataframes and saves it in the directory indicated
     """
 
-    rt_cc_df = pd.merge (rt_df, cc_df, on = "dir_id", how = "inner")
-    final_df = pd.merge (rt_cc_df, grad_df, on = "dir_id", how = "inner")
+    rt_cc_df = pd.merge (rt_df, cc_df, on = "cc_id", how = "inner")
+    final_df = pd.merge (rt_cc_df, grad_df, on = "cc_id", how = "inner")
 
     path2file = os.path.join(path2dir, "complete_processed_data.tsv")
     final_df.to_csv(path2file, sep="\t", index=False)
@@ -415,7 +618,7 @@ def _get_complete_processed_data (rt_df, cc_df, grad_df, path2dir):
 def get_processed_df_from_raw (source_path = SOURCE_PATH,
                                drop_smrt = True,
                                down_grad_filter = False,
-                               smrt_id = "0186",
+                               smrt_id = "cc_127",
                                ):
     """
         This function will build an entire directory containing the rt data, cc data, grad data and all the report files,
@@ -427,11 +630,18 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
         The up_grad_filter and down_mol_filter will be applied to ALL cases.
     """
     rt_df, cc_df, grad_df = _get_input_df()
-
+    no_same_cc_rt_df, no_same_cc_cc_df, no_same_cc_grad_df = _duplicated_cc_main(PATH2RAW_RT,
+                                                                                 PATH2RAW_CC,
+                                                                                 PATH2RAW_GRAD,
+                                                                                 rt_df,
+                                                                                 cc_df,
+                                                                                 grad_df,
+                                                                                 DROP_REPO,
+                                                                                 source_path)
     print ("Cheking for the output directory...")
     if drop_smrt:
         downsampling = False
-        rt_df = rt_df[rt_df["dir_id"] != smrt_id]
+        no_same_cc_rt_df = no_same_cc_rt_df[no_same_cc_rt_df["cc_id"] != smrt_id]
         if down_grad_filter:
             path2dir = os.path.join(source_path, "no_SMRT_down_grad_filter/")
         else:
@@ -448,15 +658,16 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     os.makedirs(os.path.join(path2dir, "report_files/"), exist_ok = True)
 
     print ("Getting processed rt data...")
-    processed_rt_df = _get_processed_rt_df(rt_df,
+    processed_rt_df = _get_processed_rt_df(no_same_cc_rt_df,
                                            path2dir=path2dir,
                                            downsampling=downsampling)
 
     print ("Getting processed cc data...")
-    processed_cc_df  =_drop_cc_columns(cc_df, path2dir)
+    processed_cc_df  =_drop_cc_columns(no_same_cc_cc_df,
+                                       path2dir)
 
     print ("Getting processed grad_data...")
-    processed_grad_df = _get_processed_grad_df(grad_df,
+    processed_grad_df = _get_processed_grad_df(no_same_cc_grad_df,
                                                path2dir=path2dir,
                                                apply_down_filtering=down_grad_filter)
     print ("Getting the complete processed data...")
@@ -469,5 +680,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-     get_processed_df_from_raw(drop_smrt=True,
-                               down_grad_filter=False,)
+    get_processed_df_from_raw(drop_smrt=True,
+                              down_grad_filter=False,)

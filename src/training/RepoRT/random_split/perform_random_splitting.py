@@ -45,9 +45,9 @@ def split_train_val_test (input_path, output_dir, drop_smrt, apply_low_grad_filt
     train_list = []
     test_list = []
     val_list = []
-    index_array = np.unique (df["dir_id"])
-    for index in index_array:
-        temp_df = df[df["dir_id"] == index]
+    cc_id_array = np.unique (df["cc_id"])
+    for cc_id in cc_id_array:
+        temp_df = df[df["cc_id"] == cc_id]
         # First split to get the test set (0.1)
         train_df, test_df = train_test_split(temp_df, test_size = 0.1, random_state = 42)
         test_list.append(test_df)

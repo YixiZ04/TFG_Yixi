@@ -37,11 +37,11 @@ def add_moldescs (df, moldesc_path):
         Also, this columns will be added next to "formula" column, this is for to commit less changes
         into next functions
     """
-    moldesc_df = pd.read_csv(moldesc_path, sep = "\t")
-    nona_moldesc_df = moldesc_df.dropna()
-    temp_df = pd.merge (df, nona_moldesc_df, left_on = "inchi.std", right_on="inchi", how="left")
+    moldesc_df = pd.read_csv(moldesc_path, sep = '\t')
+    temp_df = df.copy ()
+    temp_df = pd.merge (temp_df, moldesc_df, left_on = "inchi.std", right_on="inchi", how="inner")
     temp_df = temp_df.drop(columns=["inchi"])
-    final_df = temp_df.dropna(subset=["mono_iso_mass", "xlogp"])
+    final_df = temp_df.dropna (subset=["mono_iso_mass", "xlogp"])
 
     # Cut and Paste
     position = final_df.columns.get_loc("formula")
@@ -81,19 +81,19 @@ def get_scaled_input_train_data (train_df):
     """
     temp_list = []
     train_input_scaler = StandardScaler ()
-    index_array = np.unique (train_df["dir_id"])
+    index_array = np.unique (train_df["cc_id"])
     for index in index_array: #This loop is used to get the condition from each cc (chromatography condition)
-        temp_df = train_df[train_df["dir_id"] == index]
+        temp_df = train_df[train_df["cc_id"] == index]
         row = temp_df.iloc[:1]
         temp_list.append (row)
     temp_df = pd.concat(temp_list)
     input_data = temp_df.loc[:, "column.length":]
     train_input_scaler.fit (input_data) #This would be returned as output.
     position = train_df.columns.get_loc("column.length")
-    columns_used = train_df.columns [position:]
-    # FIXED THE SCALING PROBLEM
+    columns_used = list(train_df.columns [position:])
+    final_columns_used =  columns_used
     final_df = train_df.copy()
-    final_df [columns_used] = train_input_scaler.transform(final_df [columns_used])
+    final_df [final_columns_used] = train_input_scaler.transform(final_df [final_columns_used])
     return final_df, train_input_scaler
 
 def get_scaled_datasets (df, train_input_scaler):
@@ -102,10 +102,12 @@ def get_scaled_datasets (df, train_input_scaler):
     In this context, this is used to get test and val data using train_input_scaler.
     """
     position = df.columns.get_loc("column.length")
-    columns_used = df.columns[position:]
+    columns_used = list(df.columns[position:])
+    final_columns_used =  columns_used
+
     #FIXED THE SCALING PROBLEM
     final_df = df.copy()
-    final_df [columns_used] = train_input_scaler.transform(final_df[columns_used])
+    final_df [final_columns_used] = train_input_scaler.transform(final_df[final_columns_used])
     return final_df
 
 def get_train_dataloader (train_df, using_moldescs=False):
@@ -255,9 +257,9 @@ def get_res_table (test_df, pred_array, save_dir, save_results=True, using_molde
         As it has been set to True when not defined, other scripts that used this function do not have to be modified.
     """
     if using_moldescs:
-        temp_df =  test_df [["dir_id","molecule_id", "name","mono_iso_mass", "xlogp", "inchi.std", "rt", "max_rt", "mean_rt"]]
+        temp_df =  test_df [["cc_id","molecule_id", "name","mono_iso_mass", "xlogp", "inchi.std", "rt", "max_rt", "mean_rt"]]
     else:
-        temp_df = test_df [["dir_id","molecule_id", "name", "inchi.std", "rt", "max_rt", "mean_rt"]]
+        temp_df = test_df [["cc_id","molecule_id", "name", "inchi.std", "rt", "max_rt", "mean_rt"]]
 
     temp_df ["pred_rt"] = pred_array
     temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt"])
@@ -294,9 +296,9 @@ def write_metrics_per_cc (res_df, result_path):
         "Mean_relative_error_max":[],
         "Mean_relative_error_mean":[]
     }
-    index_array = np.unique (res_df ["dir_id"])
+    index_array = np.unique (res_df ["cc_id"])
     for index in index_array:
-        temp_df = res_df [res_df ["dir_id"] == index]
+        temp_df = res_df [res_df ["cc_id"] == index]
         result ["cc"].append (index)
         result ["MAE"].append (np.mean (temp_df["diff"]))
         result ["RMSE"].append (np.sqrt (np.mean(temp_df["diff"] ** 2)))

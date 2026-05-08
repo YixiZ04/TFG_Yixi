@@ -37,7 +37,7 @@ apply_grad_down_threshold = False                                               
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_20_04_2026/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "test/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
@@ -98,10 +98,10 @@ if __name__ == "__main__":
     os.makedirs(path2res, exist_ok=True)
 
     #Training process.
-    dir_id_array = np.unique (df["dir_id"])
+    cc_id_array = np.unique (df["cc_id"])
     results_array = []          # This array will be used store dfs to build a large df for results, where all the metrics will be calculated.
-    for dir_id in dir_id_array:
-        temp_df = df[df["dir_id"] == dir_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
+    for cc_id in cc_id_array:
+        temp_df = df[df["cc_id"] == cc_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
         # temp_df = temp_df.sample (50)         #Run this to have a quick test of the Script's usage
 
         # Build a model for each repo.
@@ -120,7 +120,7 @@ if __name__ == "__main__":
         test_pred = trainer.predict(mpnn, test_loader)
         test_pred = np.concatenate(test_pred, axis=0)
         # GETTING RESULTS
-        print (f"Getting results for the repo {dir_id}")
+        print (f"Getting results for the repo {cc_id}")
         temp_test_df = temp_df.iloc [test_indices[0]]
         temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False, using_moldescs=using_moldescs)
         results_array.append(temp_res_table)

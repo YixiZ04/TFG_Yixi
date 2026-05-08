@@ -40,26 +40,26 @@ def cc_split (input_path, output_dir, drop_smrt, apply_low_grad_filter):
     os.makedirs (output_dir, exist_ok = True)
 
     #Main process
-    dir_ids = np.unique (df["dir_id"])
+    cc_id_array = np.unique (df["cc_id"])
     np.random.seed (42)
-    np.random.shuffle (dir_ids)
+    np.random.shuffle (cc_id_array)
     print ("Splitting into differente sets")
     train_ids, val_ids, test_ids = [], [], []
     train_size = test_size = val_size = 0
-    for dir_id in dir_ids:
-        temp_df = df[df["dir_id"] == dir_id]
+    for cc_id in cc_id_array:
+        temp_df = df[df["cc_id"] == cc_id]
         if train_size + temp_df.shape [0]< 0.8*df.shape[0]:
-            train_ids.append(dir_id)
+            train_ids.append(cc_id)
             train_size += temp_df.shape[0]
         elif val_size + temp_df.shape [0]< 0.1*df.shape[0]:
-            val_ids.append(dir_id)
+            val_ids.append(cc_id)
             val_size += temp_df.shape[0]
         else:
-            test_ids.append(dir_id)
+            test_ids.append(cc_id)
             test_size += temp_df.shape[0]
-    train_dset = df[df["dir_id"].isin (train_ids)]
-    val_dset = df[df["dir_id"].isin (val_ids)]
-    test_dset = df[df["dir_id"].isin (test_ids)]
+    train_dset = df[df["cc_id"].isin (train_ids)]
+    val_dset = df[df["cc_id"].isin (val_ids)]
+    test_dset = df[df["cc_id"].isin (test_ids)]
     train_file = output_dir + "train_data.tsv"
     val_file = output_dir + "val_data.tsv"
     test_file = output_dir + "test_data.tsv"

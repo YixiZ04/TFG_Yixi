@@ -89,14 +89,14 @@ if __name__ == "__main__":
 
    # MAIN LOOP
 
-    dir_id_array = np.unique(input_df ["dir_id"])
+    cc_id_array = np.unique(input_df ["cc_id"])
 
     res_path = os.path.join ("./tmp/")           #Does not really matter, only for temporal saving
     os.makedirs(res_path, exist_ok=True)
 
     res_dfs_array = []
     metrics_dict = {
-        "dir_id": [],
+        "cc_id": [],
         "k-fold-n":[],
         "n_molecules": [],
         "MAE": [],
@@ -105,8 +105,8 @@ if __name__ == "__main__":
         "rel_max_rt_error": [],
         "rel_mean_rt_error": [],
     }
-    for dir_id in dir_id_array:
-        temp_df = input_df[input_df["dir_id"] == dir_id]
+    for cc_id in cc_id_array:
+        temp_df = input_df[input_df["cc_id"] == cc_id]
         kfold_array = []
         temp_df_kf = KFold(n_splits=10,
                            random_state=RANDOM_SEED,
@@ -146,7 +146,7 @@ if __name__ == "__main__":
             res_table = get_res_table(test_df, test_pred, res_path, using_moldescs=using_moldescs, save_results=False)
             mae, rmse, mre ,rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
             # This is extra
-            metrics_dict ["dir_id"].append(dir_id)
+            metrics_dict ["cc_id"].append(cc_id)
             metrics_dict ["k-fold-n"].append(f"fold_{i}")
             metrics_dict ["n_molecules"].append(len(test_df))
             metrics_dict["MAE"].append(mae)

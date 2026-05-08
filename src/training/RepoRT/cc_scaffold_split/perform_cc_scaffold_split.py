@@ -2,7 +2,7 @@
 Split RepoRT by chromatography condition and Murcko scaffold.
 
 Current strategy:
-    1. Build a weighted dir_id conflict problem from scaffold overlaps.
+    1. Build a weighted cc_id conflict problem from scaffold overlaps.
     2. Generate diverse greedy assignments through multiple restarts.
     3. Prune scaffolds that would be shared across splits.
     4. Relabel the final splits by retained size so that the largest split is train,
@@ -26,7 +26,7 @@ NUM_SPLITS = len(SPLIT_NAMES)
 HOLDOUT_SPLITS = (SPLIT_TO_INDEX["val"], SPLIT_TO_INDEX["test"])
 TARGET_SPLIT_RATIOS = np.array([0.8, 0.1, 0.1], dtype=np.float64)
 MIN_RETAINED_MOLECULES_PER_SPLIT = 1000
-MIN_DIR_IDS_PER_SPLIT = 5
+MIN_CC_IDS_PER_SPLIT = 5
 MIN_TRAIN_RETAINED_FRACTION = 0.5
 NUM_RESTARTS = 25
 CONFLICT_BUCKET_DECIMALS = 3
@@ -64,55 +64,55 @@ def _build_split_problem(df):
         raise ValueError("The input dataframe does not contain valid ms_smiles values.")
 
     pair_counts_df = (
-        clean_df.groupby(["dir_id", "ms_smiles"], sort=False)
+        clean_df.groupby(["cc_id", "ms_smiles"], sort=False)
         .size()
         .reset_index(name="count")
     )
 
-    dir_labels = pair_counts_df["dir_id"].drop_duplicates().to_list()
+    cc_labels = pair_counts_df["cc_id"].drop_duplicates().to_list()
     scaffold_labels = pair_counts_df["ms_smiles"].drop_duplicates().to_list()
-    dir_to_idx = {dir_id: index for index, dir_id in enumerate(dir_labels)}
+    dir_to_idx = {cc_id: index for index, cc_id in enumerate(cc_labels)}
     scaffold_to_idx = {
         scaffold: index for index, scaffold in enumerate(scaffold_labels)
     }
 
-    pair_dir_idx = pair_counts_df["dir_id"].map(dir_to_idx).to_numpy(dtype=np.int32)
+    pair_cc_idx = pair_counts_df["cc_id"].map(dir_to_idx).to_numpy(dtype=np.int32)
     pair_scaffold_idx = pair_counts_df["ms_smiles"].map(scaffold_to_idx).to_numpy(dtype=np.int32)
     pair_count = pair_counts_df["count"].to_numpy(dtype=np.int64)
 
-    num_dirs = len(dir_labels)
+    num_dirs = len(cc_labels)
     num_scaffolds = len(scaffold_labels)
     total_size = int(pair_count.sum())
 
     dir_sizes = np.zeros(num_dirs, dtype=np.int64)
-    np.add.at(dir_sizes, pair_dir_idx, pair_count)
+    np.add.at(dir_sizes, pair_cc_idx, pair_count)
 
     dir_scaffold_counts = [dict() for _ in range(num_dirs)]
     scaffold_dir_counts = {}
-    for dir_idx, scaffold_idx, count in zip(pair_dir_idx, pair_scaffold_idx, pair_count):
-        dir_scaffold_counts[dir_idx][scaffold_idx] = int(count)
-        scaffold_dir_counts.setdefault(scaffold_idx, []).append((dir_idx, int(count)))
+    for cc_idx, scaffold_idx, count in zip(pair_cc_idx, pair_scaffold_idx, pair_count):
+        dir_scaffold_counts[cc_idx][scaffold_idx] = int(count)
+        scaffold_dir_counts.setdefault(scaffold_idx, []).append((cc_idx, int(count)))
 
     private_molecule_counts = np.zeros(num_dirs, dtype=np.int64)
     for scaffold_idx, dir_counts in scaffold_dir_counts.items():
         if len(dir_counts) == 1:
-            dir_idx, count = dir_counts[0]
-            private_molecule_counts[dir_idx] += count
+            cc_idx, count = dir_counts[0]
+            private_molecule_counts[cc_idx] += count
 
     dir_conflict_matrix = np.zeros((num_dirs, num_dirs), dtype=np.float64)
     for dir_counts in scaffold_dir_counts.values():
-        n_dir_ids = len(dir_counts)
-        if n_dir_ids < 2:
+        n_cc_ids = len(dir_counts)
+        if n_cc_ids < 2:
             continue
-        scale = 1.0 / n_dir_ids
-        for (left_dir_idx, left_count), (right_dir_idx, right_count) in combinations(dir_counts, 2):
+        scale = 1.0 / n_cc_ids
+        for (left_cc_idx, left_count), (right_cc_idx, right_count) in combinations(dir_counts, 2):
             weight = min(left_count, right_count) * scale
-            dir_conflict_matrix[left_dir_idx, right_dir_idx] += weight
-            dir_conflict_matrix[right_dir_idx, left_dir_idx] += weight
+            dir_conflict_matrix[left_cc_idx, right_cc_idx] += weight
+            dir_conflict_matrix[right_cc_idx, left_cc_idx] += weight
 
     conflict_degree = dir_conflict_matrix.sum(axis=1)
 
-    row_dir_idx = clean_df["dir_id"].map(dir_to_idx).to_numpy(dtype=np.int32)
+    row_cc_idx = clean_df["cc_id"].map(dir_to_idx).to_numpy(dtype=np.int32)
     row_scaffold_idx = clean_df["ms_smiles"].map(scaffold_to_idx).to_numpy(dtype=np.int32)
 
     split_targets = TARGET_SPLIT_RATIOS * total_size
@@ -122,19 +122,19 @@ def _build_split_problem(df):
         MIN_RETAINED_MOLECULES_PER_SPLIT,
         min_holdout_target,
     )
-    min_dir_ids = _clip_minimum(
-        MIN_DIR_IDS_PER_SPLIT,
+    min_cc_ids = _clip_minimum(
+        MIN_CC_IDS_PER_SPLIT,
         min_holdout_dir_target,
     )
 
     return {
         "df": clean_df,
-        "pair_dir_idx": pair_dir_idx,
+        "pair_cc_idx": pair_cc_idx,
         "pair_scaffold_idx": pair_scaffold_idx,
         "pair_count": pair_count,
-        "row_dir_idx": row_dir_idx,
+        "row_cc_idx": row_cc_idx,
         "row_scaffold_idx": row_scaffold_idx,
-        "dir_labels": np.array(dir_labels, dtype=object),
+        "dir_labels": np.array(cc_labels, dtype=object),
         "scaffold_labels": np.array(scaffold_labels, dtype=object),
         "dir_sizes": dir_sizes,
         "dir_scaffold_counts": dir_scaffold_counts,
@@ -143,7 +143,7 @@ def _build_split_problem(df):
         "conflict_degree": conflict_degree,
         "split_targets": split_targets.astype(np.float64),
         "min_retained_molecules_per_split": int(min_retained_molecules),
-        "min_dir_ids_per_split": int(min_dir_ids),
+        "min_cc_ids_per_split": int(min_cc_ids),
         "total_size": total_size,
         "num_dirs": num_dirs,
         "num_scaffolds": num_scaffolds,
@@ -152,16 +152,16 @@ def _build_split_problem(df):
 
 def _ordered_dir_indices(problem, rng):
     """
-    Order dir_ids so that private and larger dir_ids are handled first.
+    Order cc_ids so that private and larger cc_ids are handled first.
     """
     dir_indices = np.arange(problem["num_dirs"], dtype=np.int32)
     rng.shuffle(dir_indices)
     ordered = sorted(
         dir_indices.tolist(),
-        key=lambda dir_idx: (
-            -int(problem["private_molecule_counts"][dir_idx]),
-            -int(problem["dir_sizes"][dir_idx]),
-            round(float(problem["conflict_degree"][dir_idx]), CONFLICT_BUCKET_DECIMALS),
+        key=lambda cc_idx: (
+            -int(problem["private_molecule_counts"][cc_idx]),
+            -int(problem["dir_sizes"][cc_idx]),
+            round(float(problem["conflict_degree"][cc_idx]), CONFLICT_BUCKET_DECIMALS),
         ),
     )
     for start in range(0, len(ordered), ORDER_SHUFFLE_WINDOW):
@@ -172,23 +172,23 @@ def _ordered_dir_indices(problem, rng):
     return np.array(ordered, dtype=np.int32)
 
 
-def _select_seed_dir_ids(problem, rng):
+def _select_seed_cc_ids(problem, rng):
     """
-    Pick one seed dir_id for each split.
-    Train receives a large dir_id, while val/test prefer low-conflict dir_ids with many private molecules.
+    Pick one seed cc_id for each split.
+    Train receives a large cc_id, while val/test prefer low-conflict cc_ids with many private molecules.
     """
     if problem["num_dirs"] < NUM_SPLITS:
         raise ValueError(
-            "At least three dir_ids are required to build train/val/test splits."
+            "At least three cc_ids are required to build train/val/test splits."
         )
 
     all_dir_indices = np.arange(problem["num_dirs"], dtype=np.int32)
     ranked_train_candidates = sorted(
         all_dir_indices.tolist(),
-        key=lambda dir_idx: (
-            -int(problem["dir_sizes"][dir_idx]),
-            round(float(problem["conflict_degree"][dir_idx]), CONFLICT_BUCKET_DECIMALS),
-            -int(problem["private_molecule_counts"][dir_idx]),
+        key=lambda cc_idx: (
+            -int(problem["dir_sizes"][cc_idx]),
+            round(float(problem["conflict_degree"][cc_idx]), CONFLICT_BUCKET_DECIMALS),
+            -int(problem["private_molecule_counts"][cc_idx]),
         ),
     )
     train_seed = int(
@@ -200,16 +200,16 @@ def _select_seed_dir_ids(problem, rng):
     )
 
     selected = [train_seed]
-    remaining = [dir_idx for dir_idx in all_dir_indices.tolist() if dir_idx != train_seed]
+    remaining = [cc_idx for cc_idx in all_dir_indices.tolist() if cc_idx != train_seed]
 
     def _best_holdout_seed(candidate_indices, selected_seeds):
         ranked_candidates = sorted(
             candidate_indices,
-            key=lambda dir_idx: (
-                float(problem["dir_conflict_matrix"][dir_idx, selected_seeds].sum()),
-                -int(problem["private_molecule_counts"][dir_idx]),
-                -int(problem["dir_sizes"][dir_idx]),
-                round(float(problem["conflict_degree"][dir_idx]), CONFLICT_BUCKET_DECIMALS),
+            key=lambda cc_idx: (
+                float(problem["dir_conflict_matrix"][cc_idx, selected_seeds].sum()),
+                -int(problem["private_molecule_counts"][cc_idx]),
+                -int(problem["dir_sizes"][cc_idx]),
+                round(float(problem["conflict_degree"][cc_idx]), CONFLICT_BUCKET_DECIMALS),
             ),
         )
         return int(
@@ -222,7 +222,7 @@ def _select_seed_dir_ids(problem, rng):
 
     val_seed = _best_holdout_seed(remaining, selected)
     selected.append(val_seed)
-    remaining = [dir_idx for dir_idx in remaining if dir_idx != val_seed]
+    remaining = [cc_idx for cc_idx in remaining if cc_idx != val_seed]
     test_seed = _best_holdout_seed(remaining, selected)
     return np.array([train_seed, val_seed, test_seed], dtype=np.int32)
 
@@ -235,24 +235,24 @@ def _initialize_assignment_state(problem):
     return assignment, raw_split_sizes, assigned_dir_counts, split_scaffold_counts
 
 
-def _assign_dir_to_split(problem, assignment, raw_split_sizes, assigned_dir_counts, split_scaffold_counts, dir_idx, split_idx):
-    assignment[dir_idx] = split_idx
-    raw_split_sizes[split_idx] += int(problem["dir_sizes"][dir_idx])
+def _assign_dir_to_split(problem, assignment, raw_split_sizes, assigned_dir_counts, split_scaffold_counts, cc_idx, split_idx):
+    assignment[cc_idx] = split_idx
+    raw_split_sizes[split_idx] += int(problem["dir_sizes"][cc_idx])
     assigned_dir_counts[split_idx] += 1
-    for scaffold_idx, count in problem["dir_scaffold_counts"][dir_idx].items():
+    for scaffold_idx, count in problem["dir_scaffold_counts"][cc_idx].items():
         split_scaffold_counts[split_idx][scaffold_idx] = (
             split_scaffold_counts[split_idx].get(scaffold_idx, 0) + count
         )
 
 
-def _estimated_dir_retention(problem, split_scaffold_counts, raw_split_sizes, dir_idx, candidate_split):
+def _estimated_dir_retention(problem, split_scaffold_counts, raw_split_sizes, cc_idx, candidate_split):
     """
-    Estimate how many molecules of a dir_id are likely to survive pruning if assigned to a split.
+    Estimate how many molecules of a cc_id are likely to survive pruning if assigned to a split.
     """
     retained_estimate = 0.0
     candidate_need = float(problem["split_targets"][candidate_split] - raw_split_sizes[candidate_split])
 
-    for scaffold_idx, count in problem["dir_scaffold_counts"][dir_idx].items():
+    for scaffold_idx, count in problem["dir_scaffold_counts"][cc_idx].items():
         candidate_total = split_scaffold_counts[candidate_split].get(scaffold_idx, 0) + count
         competitor_totals = []
         competitor_need = -np.inf
@@ -286,7 +286,7 @@ def _shortfalls(raw_split_sizes, dir_counts, problem, split_indices):
     dir_shortfall = int(
         np.maximum(
             0,
-            problem["min_dir_ids_per_split"] - dir_counts[list(split_indices)],
+            problem["min_cc_ids_per_split"] - dir_counts[list(split_indices)],
         ).sum()
     )
     return molecule_shortfall, dir_shortfall
@@ -301,7 +301,7 @@ def _underfilled_holdout_splits(raw_split_sizes, assigned_dir_counts, problem):
         )
         dir_shortfall = max(
             0,
-            problem["min_dir_ids_per_split"] - int(assigned_dir_counts[split_idx]),
+            problem["min_cc_ids_per_split"] - int(assigned_dir_counts[split_idx]),
         )
         if molecule_shortfall > 0 or dir_shortfall > 0:
             underfilled.append(
@@ -321,29 +321,29 @@ def _candidate_assignment_score(
     raw_split_sizes,
     assigned_dir_counts,
     split_scaffold_counts,
-    dir_idx,
+    cc_idx,
     split_idx,
     phase,
 ):
     projected_raw_sizes = raw_split_sizes.copy()
-    projected_raw_sizes[split_idx] += int(problem["dir_sizes"][dir_idx])
+    projected_raw_sizes[split_idx] += int(problem["dir_sizes"][cc_idx])
     projected_dir_counts = assigned_dir_counts.copy()
     projected_dir_counts[split_idx] += 1
 
     assigned_mask = assignment != -1
-    total_assigned_conflict = float(problem["dir_conflict_matrix"][dir_idx, assigned_mask].sum())
+    total_assigned_conflict = float(problem["dir_conflict_matrix"][cc_idx, assigned_mask].sum())
     same_split_conflict = float(
-        problem["dir_conflict_matrix"][dir_idx, assignment == split_idx].sum()
+        problem["dir_conflict_matrix"][cc_idx, assignment == split_idx].sum()
     )
     cross_split_conflict = total_assigned_conflict - same_split_conflict
     estimated_retention = _estimated_dir_retention(
         problem=problem,
         split_scaffold_counts=split_scaffold_counts,
         raw_split_sizes=raw_split_sizes,
-        dir_idx=dir_idx,
+        cc_idx=cc_idx,
         candidate_split=split_idx,
     )
-    private_bonus = int(problem["private_molecule_counts"][dir_idx])
+    private_bonus = int(problem["private_molecule_counts"][cc_idx])
     balance_penalty = float(
         np.abs(projected_raw_sizes - problem["split_targets"]).sum()
     )
@@ -374,30 +374,30 @@ def _candidate_assignment_score(
 
 def _initial_assignment(problem, seed):
     """
-    Assign complete dir_ids in two stages:
+    Assign complete cc_ids in two stages:
         1. Fill val/test until their minimum raw sizes are covered.
         2. Assign the rest while minimizing conflict and preserving balance.
     """
     rng = np.random.default_rng(seed)
     assignment, raw_split_sizes, assigned_dir_counts, split_scaffold_counts = _initialize_assignment_state(problem)
 
-    seed_dir_indices = _select_seed_dir_ids(problem, rng)
-    for split_idx, dir_idx in enumerate(seed_dir_indices):
+    seed_dir_indices = _select_seed_cc_ids(problem, rng)
+    for split_idx, cc_idx in enumerate(seed_dir_indices):
         _assign_dir_to_split(
             problem=problem,
             assignment=assignment,
             raw_split_sizes=raw_split_sizes,
             assigned_dir_counts=assigned_dir_counts,
             split_scaffold_counts=split_scaffold_counts,
-            dir_idx=int(dir_idx),
+            cc_idx=int(cc_idx),
             split_idx=split_idx,
         )
 
     ordered_dir_indices = _ordered_dir_indices(problem, rng)
     remaining_dir_indices = [
-        int(dir_idx)
-        for dir_idx in ordered_dir_indices.tolist()
-        if assignment[int(dir_idx)] == -1
+        int(cc_idx)
+        for cc_idx in ordered_dir_indices.tolist()
+        if assignment[int(cc_idx)] == -1
     ]
 
     while remaining_dir_indices:
@@ -409,7 +409,7 @@ def _initial_assignment(problem, seed):
         phase = "minimums" if underfilled_splits else "balance"
         candidate_splits = underfilled_splits if underfilled_splits else range(NUM_SPLITS)
 
-        dir_idx = remaining_dir_indices.pop(0)
+        cc_idx = remaining_dir_indices.pop(0)
         split_scores = []
         for split_idx in candidate_splits:
             score = _candidate_assignment_score(
@@ -418,7 +418,7 @@ def _initial_assignment(problem, seed):
                 raw_split_sizes=raw_split_sizes,
                 assigned_dir_counts=assigned_dir_counts,
                 split_scaffold_counts=split_scaffold_counts,
-                dir_idx=dir_idx,
+                cc_idx=cc_idx,
                 split_idx=split_idx,
                 phase=phase,
             )
@@ -443,7 +443,7 @@ def _initial_assignment(problem, seed):
             raw_split_sizes=raw_split_sizes,
             assigned_dir_counts=assigned_dir_counts,
             split_scaffold_counts=split_scaffold_counts,
-            dir_idx=dir_idx,
+            cc_idx=cc_idx,
             split_idx=int(best_split),
         )
 
@@ -480,9 +480,9 @@ def _choose_owner_splits(scaffold_split_counts, assigned_split_sizes, problem):
 
 def _evaluate_assignment(problem, assignment):
     """
-    Evaluate a full dir_id -> split assignment after pruning scaffold conflicts.
+    Evaluate a full cc_id -> split assignment after pruning scaffold conflicts.
     """
-    split_idx_per_pair = assignment[problem["pair_dir_idx"]]
+    split_idx_per_pair = assignment[problem["pair_cc_idx"]]
 
     scaffold_split_counts = np.zeros(
         (problem["num_scaffolds"], NUM_SPLITS),
@@ -511,7 +511,7 @@ def _evaluate_assignment(problem, assignment):
 
     keep_pair_mask = split_idx_per_pair == owner_splits[problem["pair_scaffold_idx"]]
     retained_by_dir = np.bincount(
-        problem["pair_dir_idx"][keep_pair_mask],
+        problem["pair_cc_idx"][keep_pair_mask],
         weights=problem["pair_count"][keep_pair_mask],
         minlength=problem["num_dirs"],
     ).astype(np.int64)
@@ -535,7 +535,7 @@ def _evaluate_assignment(problem, assignment):
     ).astype(np.int64)
     dir_shortfall = np.maximum(
         0,
-        problem["min_dir_ids_per_split"] - retained_dir_counts,
+        problem["min_cc_ids_per_split"] - retained_dir_counts,
     ).astype(np.int64)
     valid_split_mask = (molecule_shortfall == 0) & (dir_shortfall == 0)
 
@@ -568,7 +568,7 @@ def _score_evaluation(evaluation):
         2. train large enough,
         3. larger train/val/test,
         4. larger total retention,
-        5. lower balance penalty and fewer dropped dir_ids.
+        5. lower balance penalty and fewer dropped cc_ids.
     """
     return (
         evaluation["valid_split_count"],
@@ -648,7 +648,7 @@ def _relabel_evaluation_by_size(problem, evaluation):
 
 
 def _materialize_split_dataframes(problem, evaluation):
-    row_assignment = evaluation["assignment"][problem["row_dir_idx"]]
+    row_assignment = evaluation["assignment"][problem["row_cc_idx"]]
     keep_mask = row_assignment == evaluation["owner_splits"][problem["row_scaffold_idx"]]
     retained_df = problem["df"].loc[keep_mask].copy()
     retained_df.insert(0, "_split_idx", row_assignment[keep_mask])
@@ -667,16 +667,16 @@ def _validate_final_split_dataframes(split_dataframes):
 
     for left_index, left_name in enumerate(SPLIT_NAMES):
         left_df = split_dataframes[left_name]
-        left_dir_ids = set(left_df["dir_id"].unique())
+        left_cc_ids = set(left_df["cc_id"].unique())
         left_scaffolds = set(left_df["ms_smiles"].unique())
         for right_name in SPLIT_NAMES[left_index + 1:]:
             right_df = split_dataframes[right_name]
-            overlapping_dir_ids = left_dir_ids.intersection(right_df["dir_id"].unique())
+            overlapping_cc_ids = left_cc_ids.intersection(right_df["cc_id"].unique())
             overlapping_scaffolds = left_scaffolds.intersection(right_df["ms_smiles"].unique())
-            if overlapping_dir_ids:
+            if overlapping_cc_ids:
                 raise ValueError(
-                    f"Found shared dir_ids between {left_name} and {right_name}: "
-                    f"{sorted(overlapping_dir_ids)[:5]}"
+                    f"Found shared cc_ids between {left_name} and {right_name}: "
+                    f"{sorted(overlapping_cc_ids)[:5]}"
                 )
             if overlapping_scaffolds:
                 raise ValueError(
@@ -688,7 +688,7 @@ def _validate_final_split_dataframes(split_dataframes):
 def _build_dir_assignment_report(problem, original_assignment, final_evaluation):
     report_df = pd.DataFrame(
         {
-            "dir_id": problem["dir_labels"],
+            "cc_id": problem["dir_labels"],
             "original_split": [SPLIT_NAMES[index] for index in original_assignment],
             "final_split": [SPLIT_NAMES[index] for index in final_evaluation["assignment"]],
             "original_count": problem["dir_sizes"],
@@ -705,7 +705,7 @@ def _build_dir_assignment_report(problem, original_assignment, final_evaluation)
     report_df["moved"] = report_df["original_split"] != report_df["final_split"]
     report_df["dropped"] = report_df["retained_count"] == 0
     return report_df.sort_values(
-        by=["dropped", "removed_count", "dir_id"],
+        by=["dropped", "removed_count", "cc_id"],
         ascending=[True, False, True],
     ).reset_index(drop=True)
 
@@ -737,7 +737,7 @@ def cc_ms_split(
     drop_smrt,
 ):
     """
-    Obtain train/val/test splits by assigning complete dir_ids to splits and then
+    Obtain train/val/test splits by assigning complete cc_ids to splits and then
     pruning scaffolds that would be shared across splits.
     """
     if not Path(ms_complete_file).exists():
@@ -758,13 +758,13 @@ def cc_ms_split(
     print("Building split problem...")
     problem = _build_split_problem(input_df)
     print(
-        f"Loaded {problem['total_size']} molecules, {problem['num_dirs']} dir_ids "
+        f"Loaded {problem['total_size']} molecules, {problem['num_dirs']} cc_ids "
         f"and {problem['num_scaffolds']} scaffolds."
     )
     print(
         "Minimum retained split sizes:"
         f" molecules>={problem['min_retained_molecules_per_split']},"
-        f" dir_ids>={problem['min_dir_ids_per_split']}"
+        f" cc_ids>={problem['min_cc_ids_per_split']}"
     )
 
     print("Running deterministic restarts...")
@@ -783,7 +783,7 @@ def cc_ms_split(
             f"({final_evaluation['retained_total'] / problem['total_size']:.2%}), "
             f"removed={final_evaluation['removed_total']}, "
             f"sizes={final_evaluation['retained_split_sizes'].tolist()}, "
-            f"dir_ids={final_evaluation['retained_dir_counts'].tolist()}, "
+            f"cc_ids={final_evaluation['retained_dir_counts'].tolist()}, "
             f"molecule_shortfall={final_evaluation['molecule_shortfall'].tolist()}, "
             f"dir_shortfall={final_evaluation['dir_shortfall'].tolist()}, "
             f"train_fraction={final_evaluation['train_retained_fraction']:.2%}, "
@@ -803,7 +803,7 @@ def cc_ms_split(
     if best_evaluation is None:
         raise ValueError(
             "Could not generate train/val/test splits under the current "
-            "dir_id-first assignment and scaffold-pruning strategy."
+            "cc_id-first assignment and scaffold-pruning strategy."
         )
 
     if best_evaluation["valid_split_count"] < NUM_SPLITS or not best_evaluation["train_fraction_valid"]:
@@ -831,7 +831,7 @@ def cc_ms_split(
         f" test={split_dataframes['test'].shape[0]}"
     )
     print(
-        "Final retained dir_ids:"
+        "Final retained cc_ids:"
         f" train={best_evaluation['retained_dir_counts'][SPLIT_TO_INDEX['train']]},"
         f" val={best_evaluation['retained_dir_counts'][SPLIT_TO_INDEX['val']]},"
         f" test={best_evaluation['retained_dir_counts'][SPLIT_TO_INDEX['test']]}"

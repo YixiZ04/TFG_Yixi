@@ -24,8 +24,9 @@ ROOT_NAME = "k-fold"
 SIZE_DICT = {f"k-fold{fold_index}":0 for fold_index in range(1, K+1)}           # This will store the size of each split
 OBJECTIVE_DICT = {f"k-fold{fold_index}":[] for fold_index in range(1, K+1)}     # This will store the cc or murcko scaffold
 RANDOM_SEED = 42                                                                # The random seed number for all splittings.
-
+###############################################################################################
 # RANDOM SPLIT K-FOlD FUNCTIONS
+###############################################################################################
 
 def get_random_split_kfolds (df,
                              objective_dict,
@@ -36,9 +37,9 @@ def get_random_split_kfolds (df,
         The output is an array of DataFrames.
     """
 
-    dir_id_array = np.unique(df["dir_id"])
-    for dir_id in dir_id_array:
-        temp_df = df [df["dir_id"] == dir_id]
+    cc_id_array = np.unique(df["cc_id"])
+    for cc_id in cc_id_array:
+        temp_df = df [df["cc_id"] == cc_id]
         temp_folds = KFold(n_splits=10, random_state=random_seed, shuffle=True)
         fold_count = 0
         for _, fold_index in temp_folds.split(temp_df):
@@ -50,7 +51,9 @@ def get_random_split_kfolds (df,
 
     return final_df_array
 
+###############################################################################################
 # cc_split and ms_split functions
+###############################################################################################
 
 def _get_subset_sizes (df, column_name):
     """
@@ -102,8 +105,9 @@ def split_dataset_into_k_folds(df, objective_dict, size_dict, column_name):
 
 
 
-
+###############################################################################################
 # Model_per_repo functions
+###############################################################################################
 
 def mpr_get_train_loader (train_df):
     """
@@ -165,12 +169,14 @@ def mpr_get_test_loader (test_df):
                                         shuffle=False)
     return test_loader
 
+###############################################################################################
 # Save folds function. NOT APPLIED TO "model_per_repo" as we have no interest in saving ALL FOLDS.
+###############################################################################################
 
 def _write_cc_or_scaffold_report (fold_df,column_name,  path2dir, filename):
     """
         Writes a report file depending on the fold dataframe given, this will be defined by the column name.
-        For now, only used for "ms_smiles" or "dir_id".
+        For now, only used for "ms_smiles" or "cc_id".
     """
     unique_values = np.unique (fold_df [column_name])
     unique_size_dict = {unique_value: len(fold_df[fold_df[column_name]==unique_value])
@@ -226,8 +232,9 @@ def save_cc_or_scaffold_kfolds (df_array, column_name, path2dir):
                     sep='\t',
                     index=False)
     return
-
+###############################################################################################
 # Results functions
+###############################################################################################
 
 def write_overall_results (result_dict, path2output):
     """
@@ -258,7 +265,7 @@ def write_overall_results (result_dict, path2output):
 def _calculate_all_metrics (df):
     """
         This is a helper function to calculate all weighted metrics.
-        Returns a dataframe with dir_id and all the weighted metrics.
+        Returns a dataframe with cc_id and all the weighted metrics.
     """
     weights= df["n_molecules"]
     mean_mae = np.average(df["MAE"], weights= weights)
@@ -290,7 +297,7 @@ def _calculate_all_metrics (df):
 
 def write_model_per_repo_results (results_df, path2output):
     """
-        Here 2 different metrics are calculated. The mean and std deviation for each dir_id using the metric value from the Folds.
+        Here 2 different metrics are calculated. The mean and std deviation for each cc_id using the metric value from the Folds.
         The aggregated metric (weighted mean and std deviation) using the value calculated from all folds and weighted by the molecule count for each repo.
     """
 
@@ -304,14 +311,14 @@ def write_model_per_repo_results (results_df, path2output):
     # Make the metric_per_cc file
 
     temp_array = []
-    dir_id_array = np.unique (results_df["dir_id"])
-    for dir_id in dir_id_array:
-        temp_df = results_df[results_df["dir_id"] == dir_id]
+    cc_id_array = np.unique (results_df["cc_id"])
+    for cc_id in cc_id_array:
+        temp_df = results_df[results_df["cc_id"] == cc_id]
         temp_res_df = _calculate_all_metrics(temp_df)
         temp_array.append(temp_res_df)
 
     metric_per_repo_df = pd.concat(temp_array, ignore_index=True)
-    metric_per_repo_df.insert(0, "dir_id", dir_id_array)
+    metric_per_repo_df.insert(0, "cc_id", cc_id_array)
     path2metricperrepo_table = os.path.join (path2output, "metric_per_cc.tsv")
     metric_per_repo_df.to_csv(path2metricperrepo_table, sep='\t', index=False)
 
@@ -323,12 +330,17 @@ def write_model_per_repo_results (results_df, path2output):
 
     print (f"All metric files are written and saved in {path2output}")
 
+
+###############################################################################################
+# Case testing
+###############################################################################################
+
 if __name__ == "__main__":
     SIZE_DICT = {f"k-fold{fold_index}": 0 for fold_index in range(1, K + 1)}  # This will store the size of each split
     OBJECTIVE_DICT = {f"k-fold{fold_index}": [] for fold_index in
                       range(1, K + 1)}  # This will store the cc or murcko scaffold
     path2input = os.path.join(".", "data", "RepoRT_RP", "processed_data", "no_SMRT","complete_processed_data.tsv")
     df = pd.read_csv (path2input, sep="\t")
-    res_array = split_dataset_into_k_folds(df,  OBJECTIVE_DICT, SIZE_DICT,"dir_id")
-    save_cc_or_scaffold_kfolds(res_array,"dir_id","./")
+    res_array = split_dataset_into_k_folds(df,  OBJECTIVE_DICT, SIZE_DICT,"cc_id")
+    save_cc_or_scaffold_kfolds(res_array,"cc_id","./")
 

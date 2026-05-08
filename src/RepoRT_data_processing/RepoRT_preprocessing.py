@@ -1,23 +1,20 @@
 """
     Name: RepoRT_preprocessing.py
     Author: Yixi Zhang
-    Version: 2.0
-    Description: This Script does the preprocessing of the RepoRt raw data. The preprocessing is done separately to gradient data, molecule data and gradient data.
+    Description:
+    This Script does the preprocessing of the RepoRt raw data. The preprocessing is done separately to gradient data, molecule data and gradient data.
     This processing achieves these objectives:
         1. Change retention time unit: min -> s
         2. Update formulas for molecules using the Inchi or the SMILES.
-        3. Change units for the metadata.
+        3. Change units for the metadata. Any mM or uM -> %
         4. Remove all the .units columns from metadata.
-        5. Implement imputation to metadata. The strategy for now is the mean value for column metadata and 0s for all the eluent data.
+        5. Implement imputation to metadata. The strategy for now is the GLOBAL mean value for column metadata and 0s for all the eluent data.
             5.1. The t0 value for the columns is also inferrd from the imputed values.
         6. The column.usp.code is OneHotEncoded.
-        7. Eliminates the flow rate [ml/min] from the gradient_data
+        7. Update the flow_rate with the one imputed if missing in gradient data.
+            7.1. ALSO THE NEGATIVE ONE IS CHANGED AS WELL (repo nº0428)
     At the same time, all processed gradient data, column metadata and molecule data will be store separately as well as the complete preprocessed file.
     NO Report file will be made here as no modifications on Repo number has been done.
-
-    Also, only the last function will be exported.
-    Since this has been massively updated, the structure of the repo is changed and there are impact on other Scripts so these will also be fixed.
-
 """
 
 
@@ -86,7 +83,7 @@ def _infer_t0_val (diameter, length, fr):
 # RT data preprocessing functions
 def _transform_min2s(df):
     """
-        This functions converts minutes to s and renames the column from "rt" to "rt_s"
+        This functions converts minutes to seconds
     """
     final_df = df.copy()
     final_df["rt"] = round(final_df["rt"] * 60, 2)
@@ -166,24 +163,16 @@ def _process_column_data (df):
     #Get a smaller df for faster iteration. The id column is not used.
     temp_df = df.loc [:, "column.name":"column.t0"]
     # Create a dictionary with the column names as keys and the GLOBAL MEANS as the values.
-    means_dict = {column : round(np.mean(temp_df[column]), 2) for column in temp_df.columns [2:]}
+    means_dict = {column : round(temp_df[column].mean(), 2) for column in temp_df.columns [2:]}
 
     #The updating process
     for index,row in temp_df.iterrows():
         for column in temp_df.columns [2:]:
-            if pd.isnull(row[column]) and pd.isnull(row["column.name"]):
+            if pd.isnull(row[column]) :
                 # If the NAME AND THE COLUMN value BOTH MISSING.
                 temp_df.loc[index,column] = means_dict[column] #Global mean used
-            elif pd.isnull(row[column]) and pd.notnull(row["column.name"]):
-                # If the name is not missing
-                # Get the mean of subset of df where the name is the same
-                column_name = row["column.name"]
-                temp_mean = round(temp_df[temp_df["column.name"] == column_name] [column].mean(),2)
-                # Check if the mean is null. If so, global mean is used instead.
-                if pd.isnull(temp_mean):
-                    temp_df.loc[index,column] = means_dict[column]
-                else:
-                    temp_df.loc[index,column] = temp_mean
+            else:
+                continue
     # Update the df
     df.update (temp_df)
     #Updating t0 value
@@ -293,21 +282,38 @@ def _obtain_preprocessed_cc_data(cc_df,
 
 # TREATING GRADIENT INFORMATION
 
-
-def _drop_flow_rate (grad_df,
-                     path2dir,
-                     filename="preprocessed_gradient_data.tsv"):
+def _need_update (time_col, fr_col):
     """
-        Drops all the columns that contain flow rate data. As this data repeats in every segment, it should be redundant.
+        Outputs an Boolean depending on the columns given
+    """
+    return pd.notna(time_col) and pd.isna(fr_col)
+
+
+def _preprocess_grad_data (grad_df,
+                           imputed_cc_df,
+                           path2dir,
+                           filename="preprocessed_gradient_data.tsv"):
+    """
+        Update the flow rate column with the imputed flow rate value.
+        Transforms the time from minutes to seconds.
     """
     print("Preprocessing the gradient data...")
-    drop_column_array = []
-    for column in grad_df.columns:
-        if "flow rate" in column:
-            drop_column_array.append (column)
-        else:
-            continue
-    grad_df = grad_df.drop(drop_column_array, axis =1)
+
+    grad_time_array = [ column for column in grad_df.columns if "t [min]" in column]
+    grad_fr_array = [ column for column in grad_df.columns if "flow rate" in column]
+
+    grad_df [grad_fr_array] = grad_df[grad_fr_array].apply(pd.to_numeric, errors='coerce')
+    for index, row in grad_df.iterrows():
+        dir_id = row ["dir_id"]
+        fr = imputed_cc_df[imputed_cc_df["dir_id"] == dir_id].loc[:,"column.flowrate"].values[0]
+        for grad_time, grad_fr in zip(grad_time_array, grad_fr_array):
+            temp_grad_time_val = row[grad_time]
+            temp_grad_fr_val = row[grad_fr]
+            if _need_update (temp_grad_time_val, temp_grad_fr_val) or temp_grad_fr_val < 0:
+                grad_df.loc[index, grad_fr] = fr
+            else:
+                continue
+    grad_df.loc[:,grad_time_array] *= 60
 
     path2file = os.path.join(path2dir, filename)
     print(f"Saving the preprocessed gradient data as {path2file}...")
@@ -343,7 +349,10 @@ def get_preprocessed_datatable(path2dir = PATH2DIR,
         # RT preprocessing
         preprocessed_rt_df = _obtain_preprocessed_rt_df(rt_df = RT_DF, path2dir=output_dir, filename ="preprocessed_rt_data.tsv")
         preprocessed_cc_df = _obtain_preprocessed_cc_data(cc_df = CC_DF, path2dir=output_dir, filename ="preprocessed_cc_data.tsv")
-        preprocessed_grad_df = _drop_flow_rate(grad_df = GRAD_DF, path2dir=output_dir, filename="preprocessed_gradient_data.tsv")
+        preprocessed_grad_df = _preprocess_grad_data(grad_df=GRAD_DF,
+                                                     imputed_cc_df=preprocessed_cc_df,
+                                                     path2dir=output_dir,
+                                                     filename="preprocessed_gradient_data.tsv")
 
         print ("Making the complete preprocessed datatable...")
         rt_cc_df = pd.merge(preprocessed_rt_df, preprocessed_cc_df, on="dir_id", how="inner")
@@ -358,5 +367,4 @@ def get_preprocessed_datatable(path2dir = PATH2DIR,
 #Get raw datatable
 if __name__ == "__main__":
     get_preprocessed_datatable()
-
 
