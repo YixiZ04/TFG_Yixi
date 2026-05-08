@@ -21,6 +21,8 @@ import os
 import numpy as np
 import pandas as pd
 
+from pathlib import Path
+
 from chemprop import data, nn, models, featurizers
 from rdkit.Chem.inchi import MolFromInchi
 from sklearn.preprocessing import StandardScaler
@@ -192,9 +194,17 @@ def get_test_loader(test_df, using_moldescs=False):
     data_loader = data.build_dataloader(dset, num_workers=5, shuffle=False) #Dependiong on if the val or test given.
     return data_loader
 
-def complete_cc_configure_train_model (scaler, train_loader, val_loader,param_dict, cc_shape, results_path, save_model=True):
+def complete_cc_configure_train_model (scaler,
+                                       train_loader,
+                                       val_loader,
+                                       param_dict,
+                                       cc_shape,
+                                       results_path,
+                                       save_model=True,
+                                       rm_ckpt=True):
     """
         This is the main function for configurating and training a chemprop MPNN.
+        Added Boolean to decide if rm .ckpt file, default:True
     """
     mp = nn.BondMessagePassing(
         d_h=param_dict["mp_hidden_dim"],
@@ -249,9 +259,18 @@ def complete_cc_configure_train_model (scaler, train_loader, val_loader,param_di
     if save_model:
         save_model_path = results_path + "model.pt"
         torch.save(mpnn.state_dict(), save_model_path)
+    # Eliminating all ckpt files.
+    if rm_ckpt:
+        for ckpt in Path(results_path).glob("*.ckpt"):
+            ckpt.unlink()
     return mpnn, trainer
 
-def get_res_table (test_df, pred_array, save_dir, save_results=True, using_moldescs=False):
+def get_res_table (test_df,
+                   pred_array,
+                   save_dir,
+                   save_results=True,
+                   using_moldescs=False,
+                   ):
     """
         Update: A new Boolean save_results has been added as a parameter. This is mainly added for the update of model_per_repo/main.py to get the result table.
         As it has been set to True when not defined, other scripts that used this function do not have to be modified.
@@ -261,6 +280,7 @@ def get_res_table (test_df, pred_array, save_dir, save_results=True, using_molde
     else:
         temp_df = test_df [["cc_id","molecule_id", "name", "inchi.std", "rt", "max_rt", "mean_rt"]]
 
+    temp_df ["ms_smiles"] = test_df.loc[:,"ms_smiles"].values if "ms_smiles" in test_df.columns else None
     temp_df ["pred_rt"] = pred_array
     temp_df ["diff"] = np.abs (temp_df["pred_rt"] - temp_df["rt"])
     temp_df ["rel_error_max"] = temp_df ["diff"]*100 / temp_df["max_rt"]
@@ -294,7 +314,8 @@ def write_metrics_per_cc (res_df, result_path):
         "RMSE": [],
         "MRE":[],
         "Mean_relative_error_max":[],
-        "Mean_relative_error_mean":[]
+        "Mean_relative_error_mean":[],
+        "n molecules test": []
     }
     index_array = np.unique (res_df ["cc_id"])
     for index in index_array:
@@ -305,8 +326,37 @@ def write_metrics_per_cc (res_df, result_path):
         result ["MRE"].append (np.mean (temp_df["MRE"]))
         result ["Mean_relative_error_max"].append (np.mean (temp_df["rel_error_max"]))
         result ["Mean_relative_error_mean"].append (np.mean (temp_df["rel_error_mean"]))
+        result ["n molecules test"].append (len(temp_df))
     result = pd.DataFrame(result)
     result.to_csv (result_path + "metrics_per_cc.tsv", sep="\t", index=False)
+    return
+
+def write_metrics_per_scaffold (res_df, result_path):
+    """
+    Input: The Result dataframe. (Created from "get_res_table")
+    Usage: Get a .tsv file containing the mean per Bemis-Murcko scaffold data metrics got before (MAE, RMSE and %error).
+    """
+    result = {
+        "Bemis-Murcko scaffold":[],
+        "MAE":[],
+        "RMSE": [],
+        "MRE":[],
+        "Mean_relative_error_max":[],
+        "Mean_relative_error_mean":[],
+        "n molecules test": []
+    }
+    ms_array = np.unique (res_df ["ms_smiles"])
+    for ms in ms_array:
+        temp_df = res_df [res_df ["ms_smiles"] == ms]
+        result ["Bemis-Murcko scaffold"].append (ms)
+        result ["MAE"].append (np.mean (temp_df["diff"]))
+        result ["RMSE"].append (np.sqrt (np.mean(temp_df["diff"] ** 2)))
+        result ["MRE"].append (np.mean (temp_df["MRE"]))
+        result ["Mean_relative_error_max"].append (np.mean (temp_df["rel_error_max"]))
+        result ["Mean_relative_error_mean"].append (np.mean (temp_df["rel_error_mean"]))
+        result ["n molecules test"].append (len(temp_df))
+    result = pd.DataFrame(result)
+    result.to_csv (result_path + "metrics_per_ms.tsv", sep="\t", index=False)
     return
 
 def write_metric_txt (mae, rmse, mre, mean_rel_error_max_rt, mean_rel_error_mean_rt,results_path):

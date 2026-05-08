@@ -80,17 +80,17 @@ if __name__ == "__main__":
     save_dir = os.path.join(path2input, "kfolds", "random_split/")
     os.makedirs(save_dir, exist_ok=True)
     save_random_split_kfolds(kfold_array, save_dir)
+    k = len(kfold_array)
     metrics_dict = {
         "MAE": [],
-        "RMSE":[],
-        "MRE":[],
-        "rel_max_rt_error":[],
-        "rel_mean_rt_error":[],
+        "RMSE": [],
+        "MRE": [],
+        "rel_max_rt_error": [],
+        "rel_mean_rt_error": [],
+        "n molecules test": [],
     }
-    k = len(kfold_array)
-
+    temp_array = []
     for i in range(k):
-        res_path = os.path.join (path2res, f"kfold_{i}/")
         test_df = kfold_array[i]
         val_df = kfold_array[(i + 1) % k]
         train_df = [
@@ -100,7 +100,7 @@ if __name__ == "__main__":
         ]
         train_df = pd.concat(train_df, ignore_index=True)
         if using_moldescs:
-            print ("Scaling the molecular descriptors...")
+            print("Scaling the molecular descriptors...")
             train_df = add_moldescs(train_df, path2moldesc)
             test_df = add_moldescs(test_df, path2moldesc)
             val_df = add_moldescs(val_df, path2moldesc)
@@ -117,29 +117,43 @@ if __name__ == "__main__":
             scaled_val_df = get_scaled_datasets(val_df, train_input_scaler)
             scaled_test_df = get_scaled_datasets(test_df, train_input_scaler)
 
-        print ("Getting the DataLoaders...")
+        print("Getting the DataLoaders...")
         train_loader, scaler, cc_shape = get_train_dataloader(scaled_train_df, using_moldescs=using_moldescs)
         val_loader = get_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
-        test_loader = get_test_loader(scaled_test_df,  using_moldescs=using_moldescs)
+        test_loader = get_test_loader(scaled_test_df, using_moldescs=using_moldescs)
 
-        print ("Building and training the model...")
-        mpnn, trainer = complete_cc_configure_train_model(scaler, train_loader, val_loader, param_dict, cc_shape = cc_shape,results_path=res_path, save_model=True)
-
-        print (f"Writing the results files in {res_path}...")
+        print("Building and training the model...")
+        mpnn, trainer = complete_cc_configure_train_model(scaler,
+                                                          train_loader,
+                                                          val_loader,
+                                                          param_dict,
+                                                          cc_shape=cc_shape,
+                                                          results_path=path2res,
+                                                          save_model=False)
 
         test_pred = trainer.predict(mpnn, test_loader)
         test_pred = np.concatenate(test_pred, axis=0)
-        res_table = get_res_table(test_df, test_pred, res_path, using_moldescs=using_moldescs)
-        mae, rmse, mre ,rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
-        # This is extra
+        res_table = get_res_table(test_df,
+                                  test_pred,
+                                  path2res,
+                                  using_moldescs=using_moldescs,
+                                  save_results=False)
+        temp_array.append(res_table)
+        mae, rmse, mre, rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
+        # This is new
         metrics_dict["MAE"].append(mae)
-        metrics_dict["RMSE"].append (rmse)
-        metrics_dict["MRE"].append (mre)
+        metrics_dict["RMSE"].append(rmse)
+        metrics_dict["MRE"].append(mre)
         metrics_dict["rel_max_rt_error"].append(rel_max_error)
         metrics_dict["rel_mean_rt_error"].append(rel_mean_error)
-        write_parameters_file(param_dict, res_path)
-        write_metrics_per_cc(res_table, res_path)
-        write_metric_txt(mae, rmse, mre, rel_max_error, rel_mean_error, res_path)
-        print ("The resuls written successfully! Exiting the program...")
+        metrics_dict["n molecules test"].append(len(test_df))
+
+    print(f"Writting the results in {path2res}...")
+    write_parameters_file(param_dict, path2res)
+    overall_result_df = pd.concat(temp_array, ignore_index=True)
+    path2all_results = os.path.join(path2res, "all_results.tsv")
+    write_metrics_per_cc(overall_result_df, path2res)
+    overall_result_df.to_csv(path2all_results, sep="\t", index=False)
     write_overall_results(metrics_dict, path2res)
+    print("The resuls written successfully! Exiting the program...")
     sys.exit(0)

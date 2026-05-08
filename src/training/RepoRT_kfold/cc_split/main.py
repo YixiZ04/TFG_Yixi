@@ -20,7 +20,7 @@ SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")         
 dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
 apply_grad_down_threshold = False                                                      # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = True                                                                  # Set to True if want to use molecular descriptors for the model
+using_moldescs = False                                                                  # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
 path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "prueba/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data", "complete_moldesc.tsv")
@@ -87,17 +87,18 @@ if __name__ == "__main__":
         "MRE":[],
         "rel_max_rt_error":[],
         "rel_mean_rt_error":[],
+        "n molecules test":[],
     }
+    temp_array = []
     for i in range(k):
-        res_path = os.path.join (path2res, f"kfold_{i}/")
-        test_df = kfold_array[i].sample(10)
-        val_df = kfold_array[(i + 1) % k].sample(10)
+        test_df = kfold_array[i]
+        val_df = kfold_array[(i + 1) % k]
         train_df = [
             kfold_array[j]
             for j in range(k)
             if j != i and j != (i + 1) % k
         ]
-        train_df = pd.concat(train_df, ignore_index=True).sample(100)
+        train_df = pd.concat(train_df, ignore_index=True)
         if using_moldescs:
             print ("Scaling the molecular descriptors...")
             train_df = add_moldescs(train_df, path2moldesc)
@@ -122,13 +123,23 @@ if __name__ == "__main__":
         test_loader = get_test_loader(scaled_test_df,  using_moldescs=using_moldescs)
 
         print ("Building and training the model...")
-        mpnn, trainer = complete_cc_configure_train_model(scaler, train_loader, val_loader, param_dict, cc_shape = cc_shape,results_path=res_path, save_model=True)
+        mpnn, trainer = complete_cc_configure_train_model(scaler,
+                                                          train_loader,
+                                                          val_loader,
+                                                          param_dict,
+                                                          cc_shape = cc_shape,
+                                                          results_path=path2res,
+                                                          save_model=False)
 
-        print (f"Writing the results files in {res_path}...")
 
         test_pred = trainer.predict(mpnn, test_loader)
         test_pred = np.concatenate(test_pred, axis=0)
-        res_table = get_res_table(test_df, test_pred, res_path, using_moldescs=using_moldescs)
+        res_table = get_res_table(test_df,
+                                  test_pred,
+                                  path2res,
+                                  using_moldescs=using_moldescs,
+                                  save_results=False)
+        temp_array.append(res_table)
         mae, rmse, mre ,rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
         # This is new
         metrics_dict["MAE"].append(mae)
@@ -136,9 +147,14 @@ if __name__ == "__main__":
         metrics_dict["MRE"].append(mre)
         metrics_dict["rel_max_rt_error"].append(rel_max_error)
         metrics_dict["rel_mean_rt_error"].append(rel_mean_error)
-        write_parameters_file(param_dict, res_path)
-        write_metrics_per_cc(res_table, res_path)
-        write_metric_txt(mae, rmse, mre, rel_max_error, rel_mean_error, res_path)
-        print ("The resuls written successfully! Exiting the program...")
+        metrics_dict["n molecules test"].append(len(test_df))
+
+    print(f"Writting the results in {path2res}...")
+    write_parameters_file(param_dict, path2res)
+    overall_result_df = pd.concat (temp_array, ignore_index=True)
+    path2all_results = os.path.join (path2res, "all_results.tsv")
+    write_metrics_per_cc(overall_result_df, path2res)
+    overall_result_df.to_csv (path2all_results, sep="\t", index=False)
     write_overall_results(metrics_dict, path2res)
+    print ("The resuls written successfully! Exiting the program...")
     sys.exit(0)

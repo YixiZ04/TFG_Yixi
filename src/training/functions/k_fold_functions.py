@@ -236,6 +236,24 @@ def save_cc_or_scaffold_kfolds (df_array, column_name, path2dir):
 # Results functions
 ###############################################################################################
 
+def _get_aggregated_metrics (metric_array, size_array):
+    """
+        Calculates the aggregated mean based on the size of each fold.
+    """
+    mean_numerator = np.sum(metric_array * size_array)
+    denominator = np.sum(size_array)
+    agg_mean = mean_numerator / denominator
+
+    std_numerator = np.sum (size_array * (metric_array - agg_mean)**2)
+    agg_std = np.sqrt(std_numerator / denominator)
+    return np.round(agg_mean, 4), np.round(agg_std, 4)
+
+def _get_aggregated_std (metric_array, size_array):
+    """
+        Calculates the aggregated standard deviation based on the size of each fold.
+    """
+
+
 def write_overall_results (result_dict, path2output):
     """
         This function summarizes the results from all 10 runs into a single dataframe and saved in a .tsv file.
@@ -244,22 +262,31 @@ def write_overall_results (result_dict, path2output):
     """
     k = len(result_dict["MAE"])
     summarized_df = pd.DataFrame (result_dict, index=([f"run_{i}" for i in range(1, k+1)]))
+
     temp_metric_dict = {"metric":[],
-                        "mean":[],
+                        "aggregated mean":[],
                         "standard deviation":[]}
-    for column in summarized_df.columns:
+
+    size_array = summarized_df["n molecules test"].to_numpy()
+    only_metric_df = summarized_df.drop(columns=["n molecules test"])
+
+    for column in only_metric_df.columns:
+        metric_array = only_metric_df[column].to_numpy()
+        agg_mean, agg_std = _get_aggregated_metrics(metric_array, size_array)
+
         temp_metric_dict["metric"].append(column)
-        temp_metric_dict["mean"].append(summarized_df[column].mean())
-        temp_metric_dict["standard deviation"].append(summarized_df[column].std())
+        temp_metric_dict["aggregated mean"].append(agg_mean)
+        temp_metric_dict["standard deviation"].append(agg_std)
+
     metric_df = pd.DataFrame(temp_metric_dict)
     path2overall_metrics_file = os.path.join (path2output, "overall_metrics.tsv")
     metric_df.to_csv (path2overall_metrics_file, sep='\t', index=False)
 
-    summarized_df ["test_fold"] = list(range(k))
-    summarized_df ["val_fold"] = [(i + 1)%k for i in range(k)]
+    summarized_df["test_fold"] = list(range(k))
+    summarized_df["val_fold"] = [(i + 1) % k for i in range(k)]
 
     path2summirized_file = os.path.join(path2output, "result_summary.tsv")
-    summarized_df.to_csv (path2summirized_file, sep='\t')
+    summarized_df.to_csv(path2summirized_file, sep='\t')
 
 
 def _calculate_all_metrics (df):
@@ -335,12 +362,12 @@ def write_model_per_repo_results (results_df, path2output):
 # Case testing
 ###############################################################################################
 
-if __name__ == "__main__":
-    SIZE_DICT = {f"k-fold{fold_index}": 0 for fold_index in range(1, K + 1)}  # This will store the size of each split
-    OBJECTIVE_DICT = {f"k-fold{fold_index}": [] for fold_index in
-                      range(1, K + 1)}  # This will store the cc or murcko scaffold
-    path2input = os.path.join(".", "data", "RepoRT_RP", "processed_data", "no_SMRT","complete_processed_data.tsv")
-    df = pd.read_csv (path2input, sep="\t")
-    res_array = split_dataset_into_k_folds(df,  OBJECTIVE_DICT, SIZE_DICT,"cc_id")
-    save_cc_or_scaffold_kfolds(res_array,"cc_id","./")
+# if __name__ == "__main__":
+#     SIZE_DICT = {f"k-fold{fold_index}": 0 for fold_index in range(1, K + 1)}  # This will store the size of each split
+#     OBJECTIVE_DICT = {f"k-fold{fold_index}": [] for fold_index in
+#                       range(1, K + 1)}  # This will store the cc or murcko scaffold
+#     path2input = os.path.join(".", "data", "RepoRT_RP", "processed_data", "no_SMRT","complete_processed_data.tsv")
+#     df = pd.read_csv (path2input, sep="\t")
+#     res_array = split_dataset_into_k_folds(df,  OBJECTIVE_DICT, SIZE_DICT,"cc_id")
+#     save_cc_or_scaffold_kfolds(res_array,"cc_id","./")
 

@@ -13,9 +13,14 @@ which are more specific and robust.
 
 import pandas as pd
 import numpy as np
-import torch
+
+from pathlib import Path
+
 from chemprop import data, nn, models, featurizers
+
 from rdkit.Chem.inchi import MolFromInchi
+
+import torch
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
@@ -64,9 +69,16 @@ def get_dataloaders (feature_array, target_array):
     return scaler,train_loader, val_loader, test_loader, test_indices
 
 
-def configure_and_train_mpnn (scaler, train_loader, val_loader, param_dict, results_path, save_model = True):
+def configure_and_train_mpnn (scaler,
+                              train_loader,
+                              val_loader,
+                              param_dict,
+                              results_path,
+                              save_model = True,
+                              rm_ckpt=True):
     """
-    Used for configure and train a chemprop model using Trainer from lightning.pytorch
+        Used for configure and train a chemprop model using Trainer from lightning.pytorch.
+        Added a Boolean to decide whether rm or not the .ckpt file, default: True
     """
     mp = nn.BondMessagePassing(
         d_h=param_dict["mp_hidden_dim"],
@@ -121,6 +133,9 @@ def configure_and_train_mpnn (scaler, train_loader, val_loader, param_dict, resu
     if save_model:
         save_model_path = results_path + "model.pt"
         torch.save (mpnn.state_dict(), save_model_path)
+    if rm_ckpt:
+        for ckpt in Path(results_path).glob("*.ckpt"):
+            ckpt.unlink()
     return mpnn, trainer
 
 #model.load_state_dict(torch.load(PATH, weights_only=True)) #For loading. The exact same model should be first defined.
