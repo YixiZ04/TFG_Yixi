@@ -6,13 +6,16 @@
     This processing achieves these objectives:
         1. Change retention time unit: min -> s
         2. Update formulas for molecules using the Inchi or the SMILES.
-        3. Change units for the metadata. Any mM or uM -> %
+        3. Change units for the metadata. Any mM or uM -> % (m/v)
         4. Remove all the .units columns from metadata.
-        5. Implement imputation to metadata. The strategy for now is the GLOBAL mean value for column metadata and 0s for all the eluent data.
-            5.1. The t0 value for the columns is also inferrd from the imputed values.
-        6. The column.usp.code is OneHotEncoded.
-        7. Update the flow_rate with the one imputed if missing in gradient data.
-            7.1. ALSO THE NEGATIVE ONE IS CHANGED AS WELL (repo nº0428)
+        5. Implement imputation to metadata. The strategy for now is the GLOBAL mean value for column metadata
+        6. Fillna with 0 in all eluent composition of metadata.
+        7. The t0 value for the columns is inferrd from the imputed values.
+        8. The column.usp.code is OneHotEncoded.
+        9. Change the time in gradient data from min to seconds.
+        10. Update the flow_rate for the gradient data with the one imputed. The update is directed by the missing flowrate value in gradient data but the
+        t_min column is not null. There were some inconsistencies that the fr is negative in gradient data, but missing in metadata, this case is also considerated.
+
     At the same time, all processed gradient data, column metadata and molecule data will be store separately as well as the complete preprocessed file.
     NO Report file will be made here as no modifications on Repo number has been done.
 """
@@ -152,16 +155,12 @@ def _process_column_data (df):
     """
     Processes a raw RepoRT metadata tsv file.
     The processing consists in:
-        1. Check for NA vals in the columns from "column.name" to "column.t0".
-        2. If a NA value is detected, then first check if "column.name" is NA or not:
-            2.1. If so, the NA val will be filled with the global mean of that parameter.
-            2.2. If not, the NA val will be filled with the mean of the same column.
-        3. If the mean of the same column were to be NA as well, the global mean will be used again.
-        4. With all the NA vals of the metadata filled, the t0 for those columns will be inferred:
+        1. Fill all NA values with the global mean, but the column.t0 value.
+        2. With all the NA vals of the metadata filled, the t0 for those columns will be inferred:
                             t0 = V0 / F = 0.66*Vcolumn / Flow_rate
     """
     #Get a smaller df for faster iteration. The id column is not used.
-    temp_df = df.loc [:, "column.name":"column.t0"]
+    temp_df = df.loc [:, "column.name":"column.flowrate"]
     # Create a dictionary with the column names as keys and the GLOBAL MEANS as the values.
     means_dict = {column : round(temp_df[column].mean(), 2) for column in temp_df.columns [2:]}
 
@@ -176,8 +175,9 @@ def _process_column_data (df):
     # Update the df
     df.update (temp_df)
     #Updating t0 value
+
     for index, row in df.iterrows():
-        if row["column.t0"] == 0:
+        if row["column.t0"]==0:
             temp_t0 = _infer_t0_val(np.float64(row["column.id"]),
                                    np.float64(row["column.length"]),
                                    np.float64(row["column.flowrate"]))
@@ -309,7 +309,7 @@ def _preprocess_grad_data (grad_df,
         for grad_time, grad_fr in zip(grad_time_array, grad_fr_array):
             temp_grad_time_val = row[grad_time]
             temp_grad_fr_val = row[grad_fr]
-            if _need_update (temp_grad_time_val, temp_grad_fr_val) or temp_grad_fr_val < 0:
+            if _need_update (temp_grad_time_val, temp_grad_fr_val) or temp_grad_fr_val < 0: #Negative values treating
                 grad_df.loc[index, grad_fr] = fr
             else:
                 continue

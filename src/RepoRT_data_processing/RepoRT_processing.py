@@ -3,26 +3,25 @@
     Author: Yixi Zhang
     Description:
     This includes a processing for duplicated chromatography conditions. Those who share the same cc is unified into another unique id;
-    and all the processing is done using the new unique ID.
+    and all the processing is done using the new unique ID (cc_id)
     NOTE: The repeated molecules are considered as "doublets" within the new id.
+
+    Some dir_ids are eliminated beforehand, since their cc is the same, but the RT data is not consistent with this fact.
+
     This performs the processing on preprocessed RepoRT data:
         1. Eliminates columns that are not useful. Such as comment, classyfires columns.
         (The molecule name is not eliminated as it can be useful for later to identify the molecules easier).
-        2. Drop those molecules having > 12 segments gradients and  those having < 3 segments
+        2. Drop those molecules having > 12 segments gradients and those having < 3 segments (This is optional)
         3. Drop those repos that contains < 100 molecules.
-        3. Get max and mean RT for each repository, merge them to each molecule according the dir_id (**cc_id)
-    Update: Rectified a concept error here, as the final result table should not be scaled, and the scaling process will be done after data splitting using train set Scaler
-    Also, on top of the previous update, here more options are given:
-        1. Drop completely the SMRT dataset and apply down_threshold. (Drop datasets if contains less molecules than the threshold).
-        2. Not dropping completely the SMRT and apply a up_threshold, meaning that we are performing a downsampling process.
-    Overall, if all options were tested, this file could produce 6 different tsv files in ./data/processed_RepoRT/ and identified by their filename:
-        1. no_SMRT_complete_data.tsv (Dropped SMRT but no any filter has been applied, this is, it contains repos < 100 molecules)
-        2. no_SMRT_ds_data.tsv (Dropped SMRT and applied downsampling (ds), the repos contains 100 < n < 5000 molecules)
-        3. no_SMRT_no_ds_data.tsv (Dropped SMRT and applied ds, the repos contains n > 100 molecules.
-        4. with_SMRT_complete_data.tsv (Not dropped SMRT and repos contains any number of molecules).
-        5. with_SMRT_ds_data.tsv. This would be the "filtered_treated_data.tsv" in the previous version applying the filters.
-        6. with_SMRT_no_ds_data.tsv. Containing SMRT and no ds applied, but all repos contains n > 100 molecules.
-    NOTE: This is possible to create all 6 files, but it does not mean that we will evaluate models on all of them.
+        3. Get max and mean RT for each repository, merge them to each molecule according the dir_id (**cc_id).
+        4. Doublets treating: if the difference is > threshold, the doublet is elimated, else the mean value is considered.
+
+    There are 2 parameters to control: drop_smrt and down_grad_filter, and in total 4 processed dataset can be built and saved:
+        1. no_SMRT -> eliminated SMRT (cc_id = cc_127) and not eliminated those repos with < 3 segments.
+        2. with_SMRT -> Kept SMRT and not eliminated those repos with < 3 segments.
+        3. no_SMRT_down_grad_filter -> eliminated SMRT and eliminated those repos with < 3 segments.
+        4. with_SMRT_down_grad_fileter -> Kept SMRT and eliminated those repos with < 3 segments.
+    Note: The downsampling mechanism has been completely depricated, as it is not consistent at all, specially when considering dooublet treating.
 """
 # IMPORT MODULES AND SCRIPTS
 
@@ -116,16 +115,6 @@ def _write_down_filtering_report(dropped_array,path2dir, filename, down_threshol
     with open(path2file, "w") as f:
         f.write(f"These repositories have been eliminated for containing less than {down_threshold} molecules:\n")
         f.writelines(f"{index}: {n_mols} molecules\n" for dictionary in dropped_array for index, n_mols in dictionary.items())
-
-def _write_downsampling_report(ds_array, path2dir, filename, up_threshold=MOL_FILTER_UP):
-    """
-        Writes a report file containing the information of downsampled repos
-    """
-    path2file = os.path.join(path2dir, "report_files",filename)
-    with open(path2file, "w") as f:
-        f.write(f"These repositories have been downsampled for containing more than {up_threshold} molecules:\n")
-        f.writelines(
-            f"{index}: {n_mols} molecules\n" for dictionary in ds_array for index, n_mols in dictionary.items())
 
 def _write_dropped_cc_columns_report (dropped_columns_array, path2dir, filename):
     """
@@ -389,27 +378,6 @@ def _filer_by_down_threshold (rt_df,
     return final_df
 
 
-def _downsample(rt_df,
-                path2dir,
-                up_threshold = MOL_FILTER_UP,
-                ):
-    """
-        This function performs downsampling on RepoRT data and writes a report file for it.
-        As these should be applied after filtering by down_threshold, all the repo < up_threshold contains >100 molecules
-    """
-    index_array =  rt_df["cc_id"].unique()
-    final_df, ds_repos = [], []
-    for index in index_array :
-        temp_df = rt_df[rt_df["cc_id"] == index]
-        if  temp_df.shape[0] < up_threshold:
-            final_df.append (temp_df)
-        else:
-            final_df.append (temp_df.sample (up_threshold, random_state=42))
-            ds_repos.append ({index: len(temp_df)})
-
-    _write_down_filtering_report(ds_repos, path2dir, "Report_downsampling.txt")
-
-    return pd.concat (final_df)
 
 def _get_max_mean_rt_per_cc (rt_df):
     """
@@ -494,7 +462,6 @@ def _merge_treated_doublets (no_doublets_rt_df,
     return sorted_df
 
 def _get_processed_rt_df (rt_df,
-                          downsampling,
                           path2dir):
     """
         This function processed the preprocessed_rt_data
@@ -502,10 +469,7 @@ def _get_processed_rt_df (rt_df,
     print ("Processing Retention time data...")
     rt_df = _drop_rt_columns(rt_df,path2dir)
     rt_df = _filer_by_down_threshold(rt_df, path2dir)
-    if downsampling:
-        rt_df = _downsample(rt_df, path2dir)
-    else:
-        print("Not applting downsampling.")
+
     _get_max_mean_rt_per_cc(rt_df)
     no_doublets_df, doublets_df = _find_doublets(rt_df, path2dir)
     treated_doublets = _treat_doublets(doublets_df, path2dir)
@@ -623,10 +587,10 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     """
         This function will build an entire directory containing the rt data, cc data, grad data and all the report files,
         Here, 4 directories can be built depending on the Booleans' value:
-            - Containing SMRT but passed through a downsampling process.
-            - Not containing SMRT. No downsampling is performed.
-            - Containing SMRT and downsampled. But also eliminated those repositories with less than down_grad_filter segments.
-            - Not containing SMRT and NO downsampling. But also eliminated those repositories with less than down_grad_filter segments.
+            - Containing SMRT
+            - Not containing SMRT
+            - Containing SMRT and  eliminated those repositories with less than down_grad_filter segments.
+            - Not containing SMRT and eliminated those repositories with less than down_grad_filter segments.
         The up_grad_filter and down_mol_filter will be applied to ALL cases.
     """
     rt_df, cc_df, grad_df = _get_input_df()
@@ -640,14 +604,12 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
                                                                                  source_path)
     print ("Cheking for the output directory...")
     if drop_smrt:
-        downsampling = False
         no_same_cc_rt_df = no_same_cc_rt_df[no_same_cc_rt_df["cc_id"] != smrt_id]
         if down_grad_filter:
             path2dir = os.path.join(source_path, "no_SMRT_down_grad_filter/")
         else:
             path2dir = os.path.join(source_path, "no_SMRT/")
     else:
-        downsampling = True
         if down_grad_filter:
             path2dir = os.path.join(source_path, "with_SMRT_down_grad_filter/")
         else:
@@ -660,7 +622,7 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     print ("Getting processed rt data...")
     processed_rt_df = _get_processed_rt_df(no_same_cc_rt_df,
                                            path2dir=path2dir,
-                                           downsampling=downsampling)
+                                          )
 
     print ("Getting processed cc data...")
     processed_cc_df  =_drop_cc_columns(no_same_cc_cc_df,
@@ -680,5 +642,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-    get_processed_df_from_raw(drop_smrt=True,
+    get_processed_df_from_raw(drop_smrt=False,
                               down_grad_filter=False,)
