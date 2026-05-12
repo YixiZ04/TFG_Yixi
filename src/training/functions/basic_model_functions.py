@@ -1,12 +1,8 @@
 """
-Name: train_basic_model.py
-Author: Yixi Zhang
-Date: March 2026
-Version: 1.1,
-This file contains the basic functions to train a chemprop model with no mol_descs.
-Update: Eliminated all functions related to RepoRT, as they are redundant comparing to splitted_sets_functions.py's functions
-which are more specific and robust.
-
+    Name: basic_model_functiong.py
+    Author: Yixi Zhang
+    Description:
+    Add option to build the mol object using either inchi or SMILES.
 """
 
 # 0. Import modules
@@ -18,7 +14,7 @@ from pathlib import Path
 
 from chemprop import data, nn, models, featurizers
 
-from rdkit.Chem.inchi import MolFromInchi
+from rdkit.Chem import MolFromSmiles, MolFromInchi
 
 import torch
 from lightning import pytorch as pl
@@ -26,13 +22,19 @@ from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
 
 # BUILD AND CONFIGURE chemprop.MPNN.
-def get_dataloaders (feature_array, target_array):
+def get_dataloaders (feature_array, target_array, type="inchi"):
     """
     Input: a pandas dataframe containing the information for training.
     Outputs: Scaler used for scaling the targets. Train, val and test dataloaders built from the the dataframe. An array contaning the test indices.
     """
     # Convert the raw data to mol objects for getting the graph representation
-    mols = [MolFromInchi(inchi, sanitize=True) for inchi in feature_array]
+    match type:
+        case "smiles":
+            mols = [MolFromSmiles(smiles, sanitize=True) for smiles in feature_array]
+        case "inchi":
+            mols = [MolFromInchi(inchi, sanitize=True) for inchi in feature_array]
+        case _:
+            raise ValueError (f"The type should be inchi or smiles. Got {type} instead")
     all_data = [data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, target_array)]  # DataPoints
 
     #Get datapoints
@@ -188,8 +190,6 @@ def write_parameters_file (param_dict, results_path):
         f.write (f'Parameters used for this model:\n')
         for key,value in param_dict.items():
             f.write (f"{key}: {value}\n")
-
-
 
 
 

@@ -94,7 +94,7 @@ def complete_moldesc_query (initial_file = PATH2FILE,
     for index, row in df.iterrows():
         if pd.isnull (row["mono_iso_mass"]) or pd.isnull (row["xlogp"]):
             inchi = row["inchi"]
-            mol = MolFromInchi(inchi, sanitize=False)
+            mol = MolFromInchi(inchi) or MolFromInchi(inchi, sanitize=False)
             mol_wt = ExactMolWt (mol)
             logp = MolLogP(mol)
             df.loc[index, "mono_iso_mass"] = round(mol_wt, 9)

@@ -47,7 +47,7 @@ PATH2RT= os.path.join(PATH2INPUTS, "preprocessed_rt_data.tsv")
 PATH2CC = os.path.join(PATH2INPUTS, "preprocessed_cc_data.tsv")
 PATH2GRAD = os.path.join(PATH2INPUTS, "preprocessed_gradient_data.tsv")
 DROP_REPO = ["0093", "0150", "0434", "0435"]
-DOUBLET_THRESHOLD = 0.05
+DOUBLET_THRESHOLD = 0.025
 GRAD2DROP_UP = 11
 GRAD2DROP_DOWN = 2
 MOL_FILTER_DOWN = 100
@@ -594,6 +594,7 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
         The up_grad_filter and down_mol_filter will be applied to ALL cases.
     """
     rt_df, cc_df, grad_df = _get_input_df()
+    os.makedirs(source_path, exist_ok=True)
     no_same_cc_rt_df, no_same_cc_cc_df, no_same_cc_grad_df = _duplicated_cc_main(PATH2RAW_RT,
                                                                                  PATH2RAW_CC,
                                                                                  PATH2RAW_GRAD,
@@ -642,5 +643,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-    get_processed_df_from_raw(drop_smrt=False,
+    get_processed_df_from_raw(drop_smrt=True,
                               down_grad_filter=False,)

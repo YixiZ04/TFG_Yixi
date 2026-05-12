@@ -14,6 +14,8 @@ is that the input files is no longer scaled but are scaled just before training.
 IMPORTANT: Here, the scaling data is not the whole dataset, but the metadata and gradient data for each repo are only considered 1 entree. In contrary, the input data
 (metadata and gradient data) would be conditioned to the molecule number from each cc, but if this were not the better way to do the scaling, it will be changed in future versions.
 Update (1.3.): added functions and updated the result files to include molecular descriptors to both training the model and getting clearer results.
+
+NOTE: Now the SMILES is the main string used to build RDkit.Mol object
 """
 
 #IMPORT MODULES
@@ -24,7 +26,7 @@ import pandas as pd
 from pathlib import Path
 
 from chemprop import data, nn, models, featurizers
-from rdkit.Chem.inchi import MolFromInchi
+from rdkit.Chem import MolFromInchi, MolFromSmiles
 from sklearn.preprocessing import StandardScaler
 
 import torch
@@ -120,6 +122,7 @@ def get_train_dataloader (train_df, using_moldescs=False):
     Update: A new Boolean using_moldescs is implemented, and set to False by default. If True, it means that molecular descriptors will be used.
     """
     inchis = train_df.loc [:, "inchi.std"].values
+    smiles_array = train_df.loc [:, "smiles.std"].values
     rts = train_df.loc [:, ["rt"]].values
     cc_columns = train_df.loc[:,"column.usp.code_L1":].columns.tolist ()
     if using_moldescs:
@@ -132,7 +135,7 @@ def get_train_dataloader (train_df, using_moldescs=False):
         temp_column_list, axis = 1
     )
     # BUILD MOL OBJECTS
-    mols = [ MolFromInchi(inchi, sanitize=True) for inchi in inchis]
+    mols = [ MolFromSmiles(smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles,inchi in zip(smiles_array, inchis)]
     #BUILD DATAPOINTS
     all_data = [[data.MoleculeDatapoint(mol, rt, x_d = X_d) for mol, rt, X_d in zip (mols, rts, cc) ]]
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer ()
@@ -148,6 +151,7 @@ def get_val_loader (df, train_scaler, using_moldescs=False):
     Note that here, the shuffle Boolean has been set to False.
     Update: A new Boolean using_moldescs is implemented, and set to False by default. If True, it means that molecular descriptors will be used.
     """
+    smiles_array = df.loc [:, "smiles.std"].values
     inchis = df.loc[:, "inchi.std"].values
     rts = df.loc[:, ["rt"]].values
     cc_columns = df.loc[:, "column.usp.code_L1":].columns.tolist ()
@@ -161,7 +165,7 @@ def get_val_loader (df, train_scaler, using_moldescs=False):
         temp_column_list, axis=1
     )
     # BUILD MOL OBJECTS
-    mols = [MolFromInchi(inchi, sanitize=True) for inchi in inchis]
+    mols = [MolFromSmiles (smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles, inchi in zip(smiles_array, inchis)]
     # BUILD DATAPOINTS
     all_data = [[data.MoleculeDatapoint(mol, rt, x_d=X_d) for mol, rt, X_d in zip(mols, rts, cc)]]
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
@@ -174,6 +178,7 @@ def get_test_loader(test_df, using_moldescs=False):
     """
         NO SCALING ON TEST LOADER AS OUTPUT TRANSFORM HAS BEEN IMPLEMENTED IN THE CONFIGURATION
     """
+    smiles_array = test_df.loc [:, "smiles.std"].values
     inchis = test_df.loc[:, "inchi.std"].values
     rts = test_df.loc[:, ["rt"]].values
     cc_columns = test_df.loc[:, "column.usp.code_L1":].columns.tolist()
@@ -186,7 +191,7 @@ def get_test_loader(test_df, using_moldescs=False):
     cc = np.concatenate(
         temp_column_list, axis=1
     )
-    mols = [MolFromInchi(inchi, sanitize=True) for inchi in inchis]
+    mols = [MolFromSmiles (smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles, inchi in zip(smiles_array, inchis)]
     # BUILD DATAPOINTS
     all_data = [[data.MoleculeDatapoint(mol, rt, x_d=X_d) for mol, rt, X_d in zip(mols, rts, cc)]]
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()

@@ -15,7 +15,7 @@ import numpy as np
 from sklearn.model_selection import KFold
 
 from chemprop import data, featurizers
-from rdkit.Chem import MolFromInchi
+from rdkit.Chem import MolFromInchi, MolFromSmiles
 
 # PARAMETERS FOR KFOLD
 
@@ -118,8 +118,9 @@ def mpr_get_train_loader (train_df):
 
     rt_array = train_df.loc [:,["rt"]].values
     inchi_array = train_df.loc[:, "inchi.std"].values
+    smiles_array = train_df.loc [:, "smiles.std"].values
 
-    mols = [ MolFromInchi(inchi) for inchi in inchi_array]
+    mols = [ MolFromSmiles(smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles,inchi in zip(smiles_array, inchi_array)]
     all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
 
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer ()
@@ -137,8 +138,8 @@ def mpr_get_val_loader (val_df, train_scaler):
     """
     rt_array = val_df.loc[:, ["rt"]].values
     inchi_array = val_df.loc[:, "inchi.std"].values
-
-    mols = [MolFromInchi(inchi) for inchi in inchi_array]
+    smiles_array = val_df.loc[:, "smiles.std"].values
+    mols = [ MolFromSmiles(smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles,inchi in zip(smiles_array, inchi_array)]
     all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
 
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
@@ -157,8 +158,9 @@ def mpr_get_test_loader (test_df):
     """
     rt_array = test_df.loc[:, ["rt"]].values
     inchi_array = test_df.loc[:, "inchi.std"].values
+    smiles_array = test_df.loc[:, "smiles.std"].values
 
-    mols = [MolFromInchi(inchi) for inchi in inchi_array]
+    mols = [ MolFromSmiles(smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles,inchi in zip(smiles_array, inchi_array)]
     all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
 
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
