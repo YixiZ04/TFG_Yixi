@@ -28,7 +28,7 @@ def get_dataloaders_with_moldesc (df, dataset = "SMRT"):
     if dataset == "SMRT":  # Mol objects from Inchi
         inchi_array = df.loc[:, "inchi"].values
         rts = df.loc [:, ["rt"]].values
-        mols = [MolFromInchi(inchi, sanitize=False) for inchi in inchi_array]
+        mols = [MolFromInchi(inchi, sanitize=True) for inchi in inchi_array]
         all_data = [data.MoleculeDatapoint(mol, y, x_d=X_d) for mol, y, X_d in zip(mols, rts,mol_descs)]  # For each molecule, its weight and XlogP are added as extra features
     elif dataset == "RepoRT":  # Build the mol object from SMILES
         smiles = df.loc[:, "smiles.std"].values

@@ -132,7 +132,7 @@ def get_train_dataloader (train_df, using_moldescs=False):
         temp_column_list, axis = 1
     )
     # BUILD MOL OBJECTS
-    mols = [ MolFromInchi(inchi, sanitize=False) for inchi in inchis]
+    mols = [ MolFromInchi(inchi, sanitize=True) for inchi in inchis]
     #BUILD DATAPOINTS
     all_data = [[data.MoleculeDatapoint(mol, rt, x_d = X_d) for mol, rt, X_d in zip (mols, rts, cc) ]]
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer ()
@@ -161,7 +161,7 @@ def get_val_loader (df, train_scaler, using_moldescs=False):
         temp_column_list, axis=1
     )
     # BUILD MOL OBJECTS
-    mols = [MolFromInchi(inchi, sanitize=False) for inchi in inchis]
+    mols = [MolFromInchi(inchi, sanitize=True) for inchi in inchis]
     # BUILD DATAPOINTS
     all_data = [[data.MoleculeDatapoint(mol, rt, x_d=X_d) for mol, rt, X_d in zip(mols, rts, cc)]]
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
@@ -186,7 +186,7 @@ def get_test_loader(test_df, using_moldescs=False):
     cc = np.concatenate(
         temp_column_list, axis=1
     )
-    mols = [MolFromInchi(inchi, sanitize=False) for inchi in inchis]
+    mols = [MolFromInchi(inchi, sanitize=True) for inchi in inchis]
     # BUILD DATAPOINTS
     all_data = [[data.MoleculeDatapoint(mol, rt, x_d=X_d) for mol, rt, X_d in zip(mols, rts, cc)]]
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()

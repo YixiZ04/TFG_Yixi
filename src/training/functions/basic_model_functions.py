@@ -32,7 +32,7 @@ def get_dataloaders (feature_array, target_array):
     Outputs: Scaler used for scaling the targets. Train, val and test dataloaders built from the the dataframe. An array contaning the test indices.
     """
     # Convert the raw data to mol objects for getting the graph representation
-    mols = [MolFromInchi(inchi, sanitize=False) for inchi in feature_array]
+    mols = [MolFromInchi(inchi, sanitize=True) for inchi in feature_array]
     all_data = [data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, target_array)]  # DataPoints
 
     #Get datapoints
