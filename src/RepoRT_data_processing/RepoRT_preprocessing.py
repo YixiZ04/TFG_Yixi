@@ -4,8 +4,9 @@
     Description:
     This Script does the preprocessing of the RepoRt raw data. The preprocessing is done separately to gradient data, molecule data and gradient data.
     This processing achieves these objectives:
+        0. Filtered the SMRT by NPLS (Natural Products Likeness Score) with a defined threshold.
         1. Change retention time unit: min -> s
-        2. Update formulas for molecules using the Inchi or the SMILES.
+        2. Update formulas for molecules using  SMILES as the first option, if failed, Inchi will be used instead.
         3. Change units for the metadata. Any mM or uM -> % (m/v)
         4. Remove all the .units columns from metadata.
         5. Implement imputation to metadata. The strategy for now is the GLOBAL mean value for column metadata
@@ -24,6 +25,7 @@
 # Import modules
 
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -32,15 +34,23 @@ from pathlib import Path
 
 from sklearn.preprocessing import OneHotEncoder
 
-from rdkit.Chem.inchi import MolFromInchi
-from rdkit.Chem import MolFromSmiles
+from rdkit.Chem import MolFromInchi, MolFromSmiles
 from rdkit.Chem.rdMolDescriptors import CalcMolFormula
+from rdkit import RDConfig
+
+contrib_path = os.path.join(RDConfig.RDContribDir, 'NP_Score')
+
+sys.path.append(contrib_path)
+
+import npscorer
 
 from src.RepoRT_data_processing.RepoRT_get_raw_data import merge_complete_file
 
 #PARAMETERS
 EVALUABLE_METHODS = ("RP", "HILIC", "Other", "nan","_")
 PATH2DIR = os.path.join (".", "data/", )
+SMRT_DIR_ID = "0186"
+NPLS_THRESHOLD = np.float64(-0.6)
 
 
 # HELPER FUNCTIONS
@@ -84,6 +94,34 @@ def _infer_t0_val (diameter, length, fr):
     return round(((0.66*base_area*length/10)/fr)/100, 5)
 
 # RT data preprocessing functions
+def _get_npls_scored_df (df) -> pd.DataFrame:
+    """
+        Summirizes the process for getting the NPLS for a df.
+    """
+    fscore = npscorer.readNPModel()
+    smiles_array = df.loc[:,"smiles.std"].values
+    mol_array = [ MolFromSmiles(smiles) for smiles in smiles_array]
+    score_array = [ npscorer.scoreMol (mol_obj, fscore) if mol_obj is not None else np.nan for mol_obj in mol_array]
+    scored_df = df.copy()
+    scored_df ["NPLS"] = score_array
+    return scored_df.dropna(subset=["NPLS"])
+
+def _filter_smrt_by_npls (df, smrt_id=SMRT_DIR_ID, threshold=NPLS_THRESHOLD):
+    """
+        This function filters the smrt dataset by a NPLS threshold given.
+    """
+    temp_df = df.copy()
+
+    if smrt_id not in (df["dir_id"].unique()):
+        return temp_df
+
+    smrt_df = temp_df[temp_df["dir_id"] == smrt_id]
+    scored_smrt_df = _get_npls_scored_df(smrt_df)
+    filtered_df = scored_smrt_df[scored_smrt_df["NPLS"] >= threshold]
+    no_smrt_df = temp_df[temp_df["dir_id"] != smrt_id]
+    final_df = pd.concat ([no_smrt_df, filtered_df], ignore_index=True)
+    return final_df.sort_values(by="dir_id",
+                                ignore_index=True)
 def _transform_min2s(df):
     """
         This functions converts minutes to seconds
@@ -93,40 +131,18 @@ def _transform_min2s(df):
 
     return final_df
 
-def _get_mol_formula_by_inchi (inchi):
-    """
-        This function uses RDkit to get molecule object from InChI.
-    """
-    mol = MolFromInchi(inchi)
-    formula = CalcMolFormula(mol)
-    return formula
-
-def _get_mol_formula_by_smiles (smiles):
-    """
-        This function uses RDkit to get molecule object from SMILES
-    """
-    mol = MolFromSmiles(smiles)
-    formula = CalcMolFormula(mol)
-    return formula
 
 def _get_new_formula (df):
     """
         Input: RT dataframe with a column named "formula".
         Returns the dataframe with the "formula" column updated with formulas calculated with RDkit.
-        First tries with the Inchi, if can not calculate the formula, SMILES will be used.
-        If none of above notation works, the original formula will be used instead.
+        Updated, removed both functions defined before and now list comprehension is applied.
     """
-    formula_array = []
-    for index, row in df.iterrows():
-        try:
-            formula = _get_mol_formula_by_inchi(row["inchi.std"])
-            formula_array.append (formula)
-        except:
-            try:
-                formula = _get_mol_formula_by_smiles(row["smiles.std"])
-                formula_array.append (formula)
-            except:
-                formula_array.append (row["formula"])
+    inchi_array = df.loc[:,"inchi.std"].values
+    smiles_array = df.loc[:,"smiles.std"].values
+    mol_array = [ MolFromSmiles(smiles) or MolFromInchi(inchi) for smiles, inchi in zip(smiles_array, inchi_array)]
+    formula_array = [ CalcMolFormula(mol_obj) if mol_obj is not None else df.loc[index, "formula"]
+                      for index, mol_obj in enumerate(mol_array)]
     df ["formula"] = formula_array
     return df
 
@@ -136,11 +152,13 @@ def _obtain_preprocessed_rt_df (rt_df,
     """
         Preprocesses the RT data and saves it as a tsv file
     """
+    temp_df = rt_df.copy()
+    temp_df_smrt_filtered = _filter_smrt_by_npls(temp_df)
     print ("Converting the min to seconds...")
-    rt_df = _transform_min2s(rt_df)
+    temp_df_smrt_filtered = _transform_min2s(temp_df_smrt_filtered)
 
     print("Updating the formulas...")
-    final_df = _get_new_formula(rt_df)
+    final_df = _get_new_formula(temp_df_smrt_filtered)
     final_df["dir_id"] = [str(idmol).split("_")[0] for idmol in final_df["molecule_id"]]
 
     path2file = os.path.join(path2dir, filename)

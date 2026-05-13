@@ -22,6 +22,7 @@
         3. no_SMRT_down_grad_filter -> eliminated SMRT and eliminated those repos with < 3 segments.
         4. with_SMRT_down_grad_fileter -> Kept SMRT and eliminated those repos with < 3 segments.
     Note: The downsampling mechanism has been completely depricated, as it is not consistent at all, specially when considering dooublet treating.
+    Note: Now, when including SMRT, this dataset is the one filtered by NPLS using the thresholde defined in preprocessing Script.
 """
 # IMPORT MODULES AND SCRIPTS
 
@@ -643,5 +644,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-    get_processed_df_from_raw(drop_smrt=True,
+    get_processed_df_from_raw(drop_smrt=False,
                               down_grad_filter=False,)
