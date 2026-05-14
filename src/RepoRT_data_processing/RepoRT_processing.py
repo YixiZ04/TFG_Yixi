@@ -99,23 +99,6 @@ def _get_input_df (rt_input = PATH2RT,
 
     return rt_df, cc_df, grad_df
 
-def _write_rt_dropped_columns_report (dropped_columns, path2dir, filename):
-    """
-        This function writes a Report with all the dropped columns
-    """
-    path2file = os.path.join(path2dir, "report_files",filename)
-    with open(path2file, "w") as f:
-        f.write("These columns have been eliminated from the retention time data:\n")
-        f.writelines(f"{column}\n" for column in dropped_columns)
-
-def _write_down_filtering_report(dropped_array,path2dir, filename, down_threshold = MOL_FILTER_DOWN):
-    """
-        Writes a file in the directory indicated with information of the dropped molecules for containing <threshold moelcules
-    """
-    path2file = os.path.join (path2dir, "report_files",filename)
-    with open(path2file, "w") as f:
-        f.write(f"These repositories have been eliminated for containing less than {down_threshold} molecules:\n")
-        f.writelines(f"{index}: {n_mols} molecules\n" for dictionary in dropped_array for index, n_mols in dictionary.items())
 
 def _write_dropped_cc_columns_report (dropped_columns_array, path2dir, filename):
     """
@@ -127,7 +110,7 @@ def _write_dropped_cc_columns_report (dropped_columns_array, path2dir, filename)
         f.writelines (f"{index}\n" for index in dropped_columns_array)
 
 def _write_dropped_grad_down_filter_report(dropped_grad_array, path2dir, filename, down_threshold = GRAD2DROP_DOWN):
-    """ 
+    """
         Writes a report file containing information of which repos have been dropped because of containing less than down_threshold segments
     """
     path2file = os.path.join(path2dir, "report_files", filename)
@@ -338,6 +321,15 @@ def _duplicated_cc_main (path2raw_rt,
 
 
 # PROCESS RT DATA
+def _write_rt_dropped_columns_report (dropped_columns, path2dir, filename):
+    """
+        Export a tsv file containing information of dropped columns for RT data.
+    """
+
+    final_df = pd.DataFrame({"dropped columns (RT_data)": dropped_columns})
+    path2file = os.path.join(path2dir, "report_files",filename)
+    final_df.to_csv(path2file, sep='\t', index=False)
+
 def _drop_rt_columns (rt_df,
                       path2dir):
     """
@@ -345,14 +337,24 @@ def _drop_rt_columns (rt_df,
         Output: Updated df with only useful columns, dropped columns:
         ["comment", "inchikey.std", all columns containing "classyfire"]
     """
-    columns_to_drop = ["comment", "inchikey.std"]
-    for column in rt_df.columns:
-        if "classyfire" in column:
-            columns_to_drop.append(column)
+    temp_array = [ column for column in rt_df.columns if "classyfire" in column]
+    columns_to_drop = temp_array + ["comment", "inchikey.std"]
     df = rt_df.drop (columns = columns_to_drop)
 
-    _write_rt_dropped_columns_report(columns_to_drop, path2dir, "Report_rt_data_dropped_columns.txt")
+    _write_rt_dropped_columns_report(columns_to_drop, path2dir, "Report_RT_data_dropped_columns.txt")
     return df
+
+def _write_down_filtering_report(dropped_id_array, size_array, path2dir, down_threshold = MOL_FILTER_DOWN):
+    """
+        Writes a file in the directory indicated with information of the dropped molecules for containing <threshold moelcules
+    """
+
+    final_df = pd.DataFrame({"cc_id":dropped_id_array,
+                            "n molecules": size_array,})
+    final_df.loc["Total"] = final_df.sum(numeric_only=True)
+    filename = f"Report_rt_data_filtered_by_{down_threshold}.tsv"
+    path2file = os.path.join (path2dir, "report_files",filename)
+    final_df.to_csv(path2file, sep='\t', index=False)
 
 def _filer_by_down_threshold (rt_df,
                               path2dir,
@@ -362,17 +364,20 @@ def _filer_by_down_threshold (rt_df,
     """
 
     index_array = np.unique(rt_df["cc_id"])
-    final_df_array, dropped_array = [], []
+    final_df_array, dropped_id_array, size_array = [], [], []
 
     for index in index_array:
         temp_df = rt_df[rt_df["cc_id"]==index]
         if len(temp_df) >= threshold:
             final_df_array.append(temp_df)
         else:
-            dropped_array.append({index:len(temp_df)})
-    _write_down_filtering_report(dropped_array,
+            dropped_id_array.append(index)
+            size_array.append(len(temp_df))
+
+    _write_down_filtering_report(dropped_id_array,
+                                 size_array,
                                  path2dir,
-                                 "Report_down_filetering.txt")
+                                )
 
     final_df = pd.concat(final_df_array, ignore_index=True)
 
@@ -416,7 +421,8 @@ def _find_doublets(rt_df, path2dir):
 
     return no_doublets_df, doublets_df
 
-def _treat_doublets(only_doublet_df, path2save, doublet_threshold=DOUBLET_THRESHOLD):
+# def _write_doublets_report_file ()
+def _treat_doublets(only_doublet_df, path2dir, doublet_threshold=DOUBLET_THRESHOLD):
     """
         This functions treats the doublets. The difference is calculated as max(doublet_RT time) - min(doublet_RT time).
         If this difference > doublet_threshold, the entire doublet will be dropped, else the only entree will be kept using the
@@ -442,6 +448,8 @@ def _treat_doublets(only_doublet_df, path2save, doublet_threshold=DOUBLET_THRESH
             row_array.append (temp_row)
     treated_doublets = pd.concat(row_array, ignore_index=True)
     dropped_doublets = pd.concat(dropped_doublets_array, ignore_index=True)
+
+    path2save = os.path.join(path2dir, "report_files/")
 
     path2file = os.path.join (path2save, "treated_doublets.tsv")
     path2droppedfile = os.path.join(path2save, "dropped_doublets.tsv")
@@ -482,15 +490,57 @@ def _get_processed_rt_df (rt_df,
     return final_df
 
 # DEFINE CC PROCESSING FUNCTION
+def _write_dropped_repos_by_eluent (rt_df,
+                                    dropped_indexes,
+                                    path2dir
+                                    ):
+    """
+        Writes a report for those repositories (cc_id) dropped for using eluent C and D.
+        This report includes the size for each repo dropped.
+    """
+
+    dropped_repos = rt_df[rt_df["cc_id"].isin(dropped_indexes)]
+    size_array = [ len(repo) for _,repo in dropped_repos.groupby("cc_id")]
+    final_df = pd.DataFrame({"cc_id": dropped_indexes,
+                               "size": size_array,})
+    final_df.loc["Total"] = final_df.sum(numeric_only=True)
+    path2file = os.path.join(path2dir,"report_files", "dropped_repos_by_eluent.tsv")
+    final_df.to_csv(path2file, sep="\t", index=False)
+
+def _drop_eluents_cd (cc_df,
+                      rt_df,
+                      path2dir):
+    """
+        Drops those repos containing eluents C and D
+    """
+    temp_df = cc_df.copy()
+    cd_columns = [ column for column in cc_df.columns if "eluent.C" in column or "eluent.D" in column]
+    temp_df.loc[:, cd_columns] = temp_df.loc[:, cd_columns].astype(np.int64)
+    mask = (temp_df[cd_columns] != 0).any(axis=1)
+    indexes = temp_df.loc[mask, "cc_id"].values
+    final_df =temp_df[~temp_df.loc[:,"cc_id"].isin(indexes)]
+
+    _write_dropped_repos_by_eluent(rt_df,
+                                   indexes,
+                                   path2dir)
+
+    return final_df, cd_columns
+
 
 def _drop_cc_columns (cc_df,
+                      rt_df,
                       path2dir):
     """
         This functions drops those columns not used in the cc data:
         [column.name, column.usp.code], the last one is because it has already been OneHotEncoded, there is no purpose to keep the original column.
     """
-    drop_columns = ["column.name", "column.usp.code"]
-    final_df = cc_df.drop (columns = drop_columns)
+    temp_df = cc_df.copy()
+    final_df, columns2drop = _drop_eluents_cd(temp_df,
+                                              rt_df,
+                                              path2dir,)
+
+    drop_columns = columns2drop + ["column.name", "column.usp.code"]
+    final_df.drop (columns = drop_columns, inplace=True)
 
     _write_dropped_cc_columns_report(drop_columns, path2dir, "Report_dropped_cc_columns.txt")
     path2file = os.path.join(path2dir, "processed_cc_data.tsv")
@@ -537,6 +587,15 @@ def _drop_grad_data_by_up_threshold (grad_df,
 
     return final_df
 
+def _drop_gradient_data_columns (grad_df):
+    """
+        As now the eluent B and C are eliminated, these % data should be eliminated.
+    """
+    final_df = grad_df.copy()
+    dropped_columns = [ column for column in grad_df.columns if "A [%]" in column  or "C [%]" in column or "D [%]" in column ]
+    final_df.drop(columns=dropped_columns, inplace=True)
+    return final_df
+
 
 def _get_processed_grad_df (grad_df,
                             path2dir,
@@ -554,7 +613,9 @@ def _get_processed_grad_df (grad_df,
     else:
         grad_df = _drop_grad_data_by_up_threshold(grad_df, path2dir)
 
+    grad_df = _drop_gradient_data_columns(grad_df)
     grad_df = grad_df.fillna(0)
+
 
     path2file = os.path.join(path2dir, "processed_grad_data.tsv")
     grad_df.to_csv(path2file, sep="\t", index=False)
@@ -628,8 +689,8 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
 
     print ("Getting processed cc data...")
     processed_cc_df  =_drop_cc_columns(no_same_cc_cc_df,
+                                       processed_rt_df,
                                        path2dir)
-
     print ("Getting processed grad_data...")
     processed_grad_df = _get_processed_grad_df(no_same_cc_grad_df,
                                                path2dir=path2dir,
@@ -644,5 +705,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     return
 
 if __name__ == "__main__":
-    get_processed_df_from_raw(drop_smrt=False,
+    get_processed_df_from_raw(drop_smrt=True,
                               down_grad_filter=False,)

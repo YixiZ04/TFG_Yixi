@@ -120,6 +120,7 @@ def _filter_smrt_by_npls (df, smrt_id=SMRT_DIR_ID, threshold=NPLS_THRESHOLD):
     filtered_df = scored_smrt_df[scored_smrt_df["NPLS"] >= threshold]
     no_smrt_df = temp_df[temp_df["dir_id"] != smrt_id]
     final_df = pd.concat ([no_smrt_df, filtered_df], ignore_index=True)
+    final_df.drop(columns = ["NPLS"], inplace = True)
     return final_df.sort_values(by="dir_id",
                                 ignore_index=True)
 def _transform_min2s(df):
