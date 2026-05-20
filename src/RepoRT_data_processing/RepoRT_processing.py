@@ -672,7 +672,9 @@ def _write_complete_dropped_summary (path2dir,
                                      dropped_raw_data=DROPPED_RAW_DATA_REPORT,
                                      preprocessed_data_report=PREPROCESSED_DATA_REPORT,
                                      mol_threshold=MOL_FILTER_DOWN,
-                                     gradient_threshold = GRAD2DROP_UP):
+                                     gradient_threshold = GRAD2DROP_UP,
+                                     preprocessed_rt_path = PATH2RT,
+                                     dropped_repos = DROP_REPO):
     """
         Writes an complete report
     """
@@ -681,6 +683,7 @@ def _write_complete_dropped_summary (path2dir,
                         "Total molecules dropped for no gradient data (HILIC included)",
                         "Molecules dropped for non-RP",
                         "Dropped SMRT by NPLS",
+                        "Dropped by manual curation",
                         "Dropped for duplicated cc and doublets",
                         f"Dropped for containing less than {mol_threshold}",
                         "Dropped for containing eluents C and/or D",
@@ -689,6 +692,7 @@ def _write_complete_dropped_summary (path2dir,
 
     report_files_dir = os.path.join (path2dir, "report_files/")
     # Read Report files
+    preprocessed_df =pd.read_csv (preprocessed_rt_path, sep='\t', dtype={"dir_id":str})
     raw_data_summary_df = pd.read_csv (raw_data_report, sep = "\t", index_col = 0)
     dropped_raw_data_df = pd.read_csv (dropped_raw_data, sep='\t', index_col=0)
     preprocessed_data_report_df = pd.read_csv (preprocessed_data_report, sep = '\t')
@@ -702,6 +706,7 @@ def _write_complete_dropped_summary (path2dir,
     rp_molecules = total_molecules - raw_data_summary_df[raw_data_summary_df["type"] == "RP"] ["n molecules"].sum()
     dropped4no_grad = dropped_raw_data_df.loc["Total", "n molecules"]
     dropped_SMRT = float(preprocessed_data_report_df.loc[0,"n molecules"])
+    manually_curated = len(preprocessed_df[preprocessed_df["dir_id"].isin(dropped_repos)])
     dropped_doublets = float(doublets_count_df.loc [0, "total_dropped_entrees"])
     down_filtered_mols = down_filtered_df ["n molecules"].sum()
     dropped_eluent_mols = dropped4eluents ["n molecules"].sum()
@@ -711,6 +716,7 @@ def _write_complete_dropped_summary (path2dir,
                                        dropped4no_grad,
                                        float(rp_molecules),
                                        dropped_SMRT,
+                                       manually_curated,
                                        dropped_doublets,
                                        down_filtered_mols,
                                        dropped_eluent_mols,
