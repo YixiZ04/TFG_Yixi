@@ -21,8 +21,8 @@
         2. with_SMRT -> Kept SMRT and not eliminated those repos with < 3 segments.
         3. no_SMRT_down_grad_filter -> eliminated SMRT and eliminated those repos with < 3 segments.
         4. with_SMRT_down_grad_fileter -> Kept SMRT and eliminated those repos with < 3 segments.
-    Note: The downsampling mechanism has been completely depricated, as it is not consistent at all, specially when considering dooublet treating.
-    Note: Now, when including SMRT, this dataset is the one filtered by NPLS using the thresholde defined in preprocessing Script.
+    Note: The downsampling mechanism has been completely depricated, as it is not consistent at all, specially when considering doublet treating.
+    Note: Now, when including SMRT, this dataset is the one filtered by NPLS using the threshold defined in preprocessing Script.
 """
 # IMPORT MODULES AND SCRIPTS
 
@@ -54,6 +54,9 @@ GRAD2DROP_DOWN = 2
 MOL_FILTER_DOWN = 100
 MOL_FILTER_UP = 5000
 
+RAW_DATA_REPORT = os.path.join (".", "data", "RepoRT", "raw_data", "report_files", "Summary.tsv")
+DROPPED_RAW_DATA_REPORT = os.path.join (".", "data", "RepoRT", "raw_data", "report_files", "Dropped_for_no_gradient.tsv")
+PREPROCESSED_DATA_REPORT = os.path.join (".", "data", "RepoRT_RP", "preprocessed_data", "molecules_dropped_SMRT_byNPLS.tsv")
 
 #HELPER FUNCTIONS
 
@@ -118,14 +121,7 @@ def _write_dropped_grad_down_filter_report(dropped_grad_array, path2dir, filenam
         f.write(f"These repositories have been eliminated for its gradient data contains less than {down_threshold + 1} segments:\n")
         f.writelines(f"{index}\n" for index in dropped_grad_array)
 
-def _write_dropped_grad_up_filter_report(dropped_grad_array, path2dir, filename, up_threshold = GRAD2DROP_UP):
-    """
-        Writes a report file containing information of which repos have been dropped because of containing less than down_threshold segments
-    """
-    path2file = os.path.join(path2dir,"report_files", filename)
-    with open(path2file, "w") as f:
-        f.write(f"These repositories have been eliminated for its gradient data contains more than {up_threshold + 1} segments:\n")
-        f.writelines(f"{index}\n" for index in dropped_grad_array)
+
 
 def _write_complete_info_report(complete_df, path2dir, filename):
     """
@@ -133,18 +129,21 @@ def _write_complete_info_report(complete_df, path2dir, filename):
             - The molecule count.
             - The directories contained
     """
-    n_molecules = len(complete_df)
     repos = complete_df["cc_id"].unique()
-    size_dict = {}
+    size_dict = {
+        "cc_id":[],
+        "n molecules":[]
+    }
     for repo in repos:
         temp_df = complete_df[complete_df["cc_id"] == repo]
-        size_dict[repo] = len(temp_df)
+        size_dict["cc_id"].append(repo)
+        size_dict["n molecules"].append(len(temp_df))
+
+    size_df = pd.DataFrame(size_dict)
+    size_df.loc["Total", "n molecules"] = size_df ["n molecules"].sum()
 
     path2file = os.path.join(path2dir, "report_files",filename)
-    with open(path2file, "w") as f:
-        f.write(f"This dataset contains {n_molecules} molecules\n")
-        f.write(f"The directory contained in this dataset are:\n")
-        f.writelines(f"{index}: {size}\n" for index, size in size_dict.items())
+    size_df.to_csv (path2file, sep='\t', index=False)
 
 
 ## Check Duplicated cc, and get the dir_ids array
@@ -416,7 +415,9 @@ def _find_doublets(rt_df, path2dir):
     """
     no_doublets_df = rt_df [~rt_df.duplicated(subset=["cc_id", "smiles.std"], keep=False)]
     doublets_df = rt_df [rt_df.duplicated(subset=["cc_id", "smiles.std"], keep=False)]
-    path2file = os.path.join(path2dir, "doublets.tsv")
+    path2save = os.path.join(path2dir, "report_files/")
+
+    path2file = os.path.join(path2save, "doublets.tsv")
     doublets_df.to_csv(path2file, sep="\t", index=False)
 
     return no_doublets_df, doublets_df
@@ -435,6 +436,12 @@ def _treat_doublets(only_doublet_df, path2dir, doublet_threshold=DOUBLET_THRESHO
     """
     row_array = []
     dropped_doublets_array = []
+    summary_dict = {
+        "treated_entrees":[0],
+        "dropped_entrees":[0],
+        "restant_entrees": [0],
+        "total_dropped_entrees":[0]
+    }
     grouped_df = only_doublet_df.groupby (["cc_id", "smiles.std"])
     for _,doublet in grouped_df:
         diff = doublet["rt"].max() - doublet["rt"].min()
@@ -442,10 +449,15 @@ def _treat_doublets(only_doublet_df, path2dir, doublet_threshold=DOUBLET_THRESHO
         temp_threshold = doublet_threshold * doublet.iloc[0] ["max_rt"]
         if diff > temp_threshold:
             dropped_doublets_array.append(doublet)
+            summary_dict ["dropped_entrees"] [0] += len(doublet)
         else:
             temp_row = doublet.iloc[[0]]
             temp_row ["rt"] = doublet["rt"].mean()
             row_array.append (temp_row)
+            summary_dict["restant_entrees"] [0] += 1
+            summary_dict["treated_entrees"] [0] += len(doublet)
+            summary_dict ["total_dropped_entrees"] [0] += len(doublet) - 1
+    summary_dict["total_dropped_entrees"] [0] += summary_dict ["dropped_entrees"][0]
     treated_doublets = pd.concat(row_array, ignore_index=True)
     dropped_doublets = pd.concat(dropped_doublets_array, ignore_index=True)
 
@@ -456,7 +468,8 @@ def _treat_doublets(only_doublet_df, path2dir, doublet_threshold=DOUBLET_THRESHO
 
     treated_doublets.to_csv(path2file, sep='\t', index=False)
     dropped_doublets.to_csv (path2droppedfile, sep='\t', index=False)
-
+    summary_df = pd.DataFrame(summary_dict)
+    summary_df.to_csv (os.path.join(path2save, "doublets_count.tsv"),sep='\t', index=False)
     return treated_doublets
 
 def _merge_treated_doublets (no_doublets_rt_df,
@@ -502,8 +515,8 @@ def _write_dropped_repos_by_eluent (rt_df,
     dropped_repos = rt_df[rt_df["cc_id"].isin(dropped_indexes)]
     size_array = [ len(repo) for _,repo in dropped_repos.groupby("cc_id")]
     final_df = pd.DataFrame({"cc_id": dropped_indexes,
-                               "size": size_array,})
-    final_df.loc["Total"] = final_df.sum(numeric_only=True)
+                             "n molecules": size_array,})
+    final_df.loc["Total","n molecules" ] = final_df ["n molecules"].sum()
     path2file = os.path.join(path2dir,"report_files", "dropped_repos_by_eluent.tsv")
     final_df.to_csv(path2file, sep="\t", index=False)
 
@@ -568,8 +581,23 @@ def _drop_grad_data_by_down_threshold(grad_df,
                                            "Report_downfiltering.txt")
 
     return final_df
+def _write_dropped_grad_up_filter_report(dropped_grad_array, rt_df,path2dir, filename, up_threshold = GRAD2DROP_UP):
+    """
+        Writes a report file containing information of which repos have been dropped because of containing less than down_threshold segments
+    """
+    path2file = os.path.join(path2dir,"report_files", filename)
+    temp_df = rt_df[rt_df["cc_id"].isin(dropped_grad_array)]
+
+    size_dict = {
+        "cc_id":dropped_grad_array,
+        "n molecules": [ len(repo) for _,repo in temp_df.groupby("cc_id")]
+    }
+    size_df = pd.DataFrame(size_dict)
+    size_df.loc["Total", "n molecules"] = size_df ["n molecules"].sum()
+    size_df.to_csv(path2file, sep="\t", index=False)
 
 def _drop_grad_data_by_up_threshold (grad_df,
+                                     rt_df,
                                      path2dir,
                                      up_threshold=GRAD2DROP_UP):
     """
@@ -582,8 +610,9 @@ def _drop_grad_data_by_up_threshold (grad_df,
     final_df = grad_df[grad_df[threshold_column].isna()].loc[:, :previous_column]
     dropped_repos = grad_df.loc [~grad_df["cc_id"].isin(final_df["cc_id"]), "cc_id"].values
     _write_dropped_grad_up_filter_report(dropped_repos,
+                                         rt_df,
                                          path2dir,
-                                         "Report_upfiltering.txt")
+                                         "Report_upfiltering.tsv")
 
     return final_df
 
@@ -598,6 +627,7 @@ def _drop_gradient_data_columns (grad_df):
 
 
 def _get_processed_grad_df (grad_df,
+                            rt_df,
                             path2dir,
                             apply_down_filtering):
     """
@@ -609,9 +639,8 @@ def _get_processed_grad_df (grad_df,
 
     if apply_down_filtering:
         grad_df = _drop_grad_data_by_down_threshold(grad_df, path2dir)
-        grad_df = _drop_grad_data_by_up_threshold(grad_df, path2dir)
-    else:
-        grad_df = _drop_grad_data_by_up_threshold(grad_df, path2dir)
+
+    grad_df = _drop_grad_data_by_up_threshold(grad_df,rt_df, path2dir)
 
     grad_df = _drop_gradient_data_columns(grad_df)
     grad_df = grad_df.fillna(0)
@@ -638,6 +667,58 @@ def _get_complete_processed_data (rt_df, cc_df, grad_df, path2dir):
     return final_df
 
 
+def _write_complete_dropped_summary (path2dir,
+                                     raw_data_report = RAW_DATA_REPORT,
+                                     dropped_raw_data=DROPPED_RAW_DATA_REPORT,
+                                     preprocessed_data_report=PREPROCESSED_DATA_REPORT,
+                                     mol_threshold=MOL_FILTER_DOWN,
+                                     gradient_threshold = GRAD2DROP_UP):
+    """
+        Writes an complete report
+    """
+    temp_dict = {
+        "Description": ["Total molecules RepoRT",
+                        "Total molecules dropped for no gradient data (HILIC included)",
+                        "Molecules dropped for non-RP",
+                        "Dropped SMRT by NPLS",
+                        "Dropped for duplicated cc and doublets",
+                        f"Dropped for containing less than {mol_threshold}",
+                        "Dropped for containing eluents C and/or D",
+                        f"Dropped for containing more than {gradient_threshold} segments"],
+    }
+
+    report_files_dir = os.path.join (path2dir, "report_files/")
+    # Read Report files
+    raw_data_summary_df = pd.read_csv (raw_data_report, sep = "\t", index_col = 0)
+    dropped_raw_data_df = pd.read_csv (dropped_raw_data, sep='\t', index_col=0)
+    preprocessed_data_report_df = pd.read_csv (preprocessed_data_report, sep = '\t')
+    doublets_count_df = pd.read_csv (os.path.join(report_files_dir, "doublets_count.tsv"), sep='\t')
+    down_filtered_df = pd.read_csv (os.path.join (report_files_dir, f"Report_rt_data_filtered_by_{mol_threshold}.tsv"), sep='\t')
+    dropped4eluents = pd.read_csv (os.path.join(report_files_dir, "dropped_repos_by_eluent.tsv"), sep='\t')
+    dropped4gradient = pd.read_csv (os.path.join (report_files_dir, "Report_upfiltering.tsv"), sep='\t')
+
+    # Metrics
+    total_molecules = raw_data_summary_df.loc["Total","n molecules"]
+    rp_molecules = total_molecules - raw_data_summary_df[raw_data_summary_df["type"] == "RP"] ["n molecules"].sum()
+    dropped4no_grad = dropped_raw_data_df.loc["Total", "n molecules"]
+    dropped_SMRT = float(preprocessed_data_report_df.loc[0,"n molecules"])
+    dropped_doublets = float(doublets_count_df.loc [0, "total_dropped_entrees"])
+    down_filtered_mols = down_filtered_df ["n molecules"].sum()
+    dropped_eluent_mols = dropped4eluents ["n molecules"].sum()
+    dropped_gradient_mols = dropped4gradient ["n molecules"].sum()
+
+    temp_dict ["n molecules"]=np.array([total_molecules,
+                                       dropped4no_grad,
+                                       float(rp_molecules),
+                                       dropped_SMRT,
+                                       dropped_doublets,
+                                       down_filtered_mols,
+                                       dropped_eluent_mols,
+                                       dropped_gradient_mols])
+
+    final_df = pd.DataFrame (temp_dict)
+    final_df.loc["Total_dropped", "n molecules"] = np.sum(final_df.loc[1:, "n molecules"])
+    final_df.to_csv (os.path.join (report_files_dir, "complete_summary.tsv"), sep='\t', index=False)
 
 # Main function
 
@@ -693,6 +774,7 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
                                        path2dir)
     print ("Getting processed grad_data...")
     processed_grad_df = _get_processed_grad_df(no_same_cc_grad_df,
+                                               rt_df=no_same_cc_rt_df,
                                                path2dir=path2dir,
                                                apply_down_filtering=down_grad_filter)
     print ("Getting the complete processed data...")
@@ -700,9 +782,10 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
                                  processed_cc_df,
                                  processed_grad_df,
                                  path2dir)
-    _write_complete_info_report(complete_df, path2dir, "Report_complete_info.txt")
+    _write_complete_info_report(complete_df, path2dir, "Report_complete_info.tsv")
+    _write_complete_dropped_summary(path2dir)
+
     print (f"All the file saved in {path2dir}!!")
-    return
 
 if __name__ == "__main__":
     get_processed_df_from_raw(drop_smrt=True,

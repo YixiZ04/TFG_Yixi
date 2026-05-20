@@ -118,11 +118,12 @@ def _filter_smrt_by_npls (df, smrt_id=SMRT_DIR_ID, threshold=NPLS_THRESHOLD):
     smrt_df = temp_df[temp_df["dir_id"] == smrt_id]
     scored_smrt_df = _get_npls_scored_df(smrt_df)
     filtered_df = scored_smrt_df[scored_smrt_df["NPLS"] >= threshold]
+    report_df = pd.DataFrame({"dir_id":["0186"],
+                             "n molecules": [len(smrt_df) - len(filtered_df) ]})
     no_smrt_df = temp_df[temp_df["dir_id"] != smrt_id]
     final_df = pd.concat ([no_smrt_df, filtered_df], ignore_index=True)
     final_df.drop(columns = ["NPLS"], inplace = True)
-    return final_df.sort_values(by="dir_id",
-                                ignore_index=True)
+    return final_df.sort_values(by="dir_id",ignore_index=True), report_df
 def _transform_min2s(df):
     """
         This functions converts minutes to seconds
@@ -149,12 +150,17 @@ def _get_new_formula (df):
 
 def _obtain_preprocessed_rt_df (rt_df,
                                 path2dir,
+                                method,
                                 filename="preprocessed_rt_data.tsv"):
     """
         Preprocesses the RT data and saves it as a tsv file
     """
     temp_df = rt_df.copy()
-    temp_df_smrt_filtered = _filter_smrt_by_npls(temp_df)
+    if method == "_" or method == "RP":
+        temp_df_smrt_filtered, report_df = _filter_smrt_by_npls(temp_df)
+        report_df.to_csv (os.path.join(path2dir, "molecules_dropped_SMRT_byNPLS.tsv"), sep='\t', index=False)
+    else:
+        temp_df_smrt_filtered = _filter_smrt_by_npls(temp_df)
     print ("Converting the min to seconds...")
     temp_df_smrt_filtered = _transform_min2s(temp_df_smrt_filtered)
 
@@ -366,7 +372,7 @@ def get_preprocessed_datatable(path2dir = PATH2DIR,
                                               grad_input = new_grad_input,)
 
         # RT preprocessing
-        preprocessed_rt_df = _obtain_preprocessed_rt_df(rt_df = RT_DF, path2dir=output_dir, filename ="preprocessed_rt_data.tsv")
+        preprocessed_rt_df = _obtain_preprocessed_rt_df(rt_df = RT_DF, path2dir=output_dir, method=method,filename ="preprocessed_rt_data.tsv")
         preprocessed_cc_df = _obtain_preprocessed_cc_data(cc_df = CC_DF, path2dir=output_dir, filename ="preprocessed_cc_data.tsv")
         preprocessed_grad_df = _preprocess_grad_data(grad_df=GRAD_DF,
                                                      imputed_cc_df=preprocessed_cc_df,
