@@ -12,7 +12,7 @@
         1. Eliminates columns that are not useful. Such as comment, classyfires columns.
         (The molecule name is not eliminated as it can be useful for later to identify the molecules easier).
         2. Drop those molecules having > 12 segments gradients and those having < 3 segments (This is optional)
-        3. Drop those repos that contains < 100 molecules.
+        3. Drop those repos that contains < 100 molecules (This is the default value, but it can be changed).
         3. Get max and mean RT for each repository, merge them to each molecule according the dir_id (**cc_id).
         4. Doublets treating: if the difference is > threshold, the doublet is elimated, else the mean value is considered.
 
@@ -23,6 +23,10 @@
         4. with_SMRT_down_grad_fileter -> Kept SMRT and eliminated those repos with < 3 segments.
     Note: The downsampling mechanism has been completely depricated, as it is not consistent at all, specially when considering doublet treating.
     Note: Now, when including SMRT, this dataset is the one filtered by NPLS using the threshold defined in preprocessing Script.
+    Note: There are several repos dropped by manually curation:
+        1. 0093 and 0150 -> These are dropped because of that they have the same cc to some others, but in reality, the sample preparation is different, thus the
+           results should be different.
+        2. 0434 and 0435 -> Even though these have the same cc, but their methods seem to be different: RP and HILIC.
 """
 # IMPORT MODULES AND SCRIPTS
 
@@ -621,7 +625,7 @@ def _drop_gradient_data_columns (grad_df):
         As now the eluent B and C are eliminated, these % data should be eliminated.
     """
     final_df = grad_df.copy()
-    dropped_columns = [ column for column in grad_df.columns if "A [%]" in column  or "C [%]" in column or "D [%]" in column ]
+    dropped_columns = [ column for column in grad_df.columns if "C [%]" in column or "D [%]" in column ]
     final_df.drop(columns=dropped_columns, inplace=True)
     return final_df
 
@@ -680,14 +684,16 @@ def _write_complete_dropped_summary (path2dir,
     """
     temp_dict = {
         "Description": ["Total molecules RepoRT",
-                        "Total molecules dropped for no gradient data (HILIC included)",
+                        "Total molecules dropped for not having gradient data",
                         "Molecules dropped for non-RP",
                         "Dropped SMRT by NPLS",
                         "Dropped by manual curation",
                         "Dropped for duplicated cc and doublets",
                         f"Dropped for containing less than {mol_threshold}",
                         "Dropped for containing eluents C and/or D",
-                        f"Dropped for containing more than {gradient_threshold} segments"],
+                        f"Dropped for containing more than {gradient_threshold} segments",
+                        f"Total dropped molecules",
+        ]
     }
 
     report_files_dir = os.path.join (path2dir, "report_files/")
@@ -708,9 +714,10 @@ def _write_complete_dropped_summary (path2dir,
     dropped_SMRT = float(preprocessed_data_report_df.loc[0,"n molecules"])
     manually_curated = len(preprocessed_df[preprocessed_df["dir_id"].isin(dropped_repos)])
     dropped_doublets = float(doublets_count_df.loc [0, "total_dropped_entrees"])
-    down_filtered_mols = down_filtered_df ["n molecules"].sum()
-    dropped_eluent_mols = dropped4eluents ["n molecules"].sum()
-    dropped_gradient_mols = dropped4gradient ["n molecules"].sum()
+    down_filtered_mols = down_filtered_df["n molecules"].sum() / 2
+    dropped_eluent_mols = dropped4eluents["n molecules"].sum() / 2
+    dropped_gradient_mols = dropped4gradient ["n molecules"].sum() / 2
+
 
     temp_dict ["n molecules"]=np.array([total_molecules,
                                        dropped4no_grad,
@@ -720,10 +727,12 @@ def _write_complete_dropped_summary (path2dir,
                                        dropped_doublets,
                                        down_filtered_mols,
                                        dropped_eluent_mols,
-                                       dropped_gradient_mols])
+                                       dropped_gradient_mols,
+                                       0.0])
 
     final_df = pd.DataFrame (temp_dict)
-    final_df.loc["Total_dropped", "n molecules"] = np.sum(final_df.loc[1:, "n molecules"])
+    mask = (final_df["Description"] == "Total dropped molecules")
+    final_df.loc[mask, "n molecules"] = np.sum(final_df.loc[1:, "n molecules"])
     final_df.to_csv (os.path.join (report_files_dir, "complete_summary.tsv"), sep='\t', index=False)
 
 # Main function
@@ -794,5 +803,5 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     print (f"All the file saved in {path2dir}!!")
 
 if __name__ == "__main__":
-    get_processed_df_from_raw(drop_smrt=True,
+    get_processed_df_from_raw(drop_smrt=False,
                               down_grad_filter=False,)
