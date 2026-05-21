@@ -23,7 +23,7 @@ import sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from chemprop import  nn
+from chemprop import nn
 from lightning import pytorch as pl
 from src.training.functions.basic_model_functions import get_dataloaders, configure_and_train_mpnn
 from src.training.functions.moldesc_model_functions import get_dataloaders_with_moldesc, configure_and_train_mpnn_moldesc
@@ -31,28 +31,28 @@ from src.training.functions.splitted_sets_functions import *
 from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
-SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data_0/")                        # This is the source directory that contains all processed files
+dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
 apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "test/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "21_05_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
 
 param_dict = {
-    "mp_hidden_dim": 451,                             # Hidden dimension of the message passing (MP) part
+    "mp_hidden_dim": 460,                             # Hidden dimension of the message passing (MP) part
     "mp_depth": 4,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 1493,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 4,                                  # Number of layers for the ffn.
+    "ffn_hidden_dim": 1400,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
+    "ffn_layers": 3,                                  # Number of layers for the ffn.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
+    "dropout_rate": 0.12,                              # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
     "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     # Make sure the directory exists.
     print ("Checking for the output directory...")
     os.makedirs(path2res, exist_ok=True)
-
+    cant_train_array = []
     #Training process.
     cc_id_array = np.unique (df["cc_id"])
     results_array = []          # This array will be used store dfs to build a large df for results, where all the metrics will be calculated.
@@ -104,28 +104,35 @@ if __name__ == "__main__":
         temp_df = df[df["cc_id"] == cc_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
         # temp_df = temp_df.sample (50)         #Run this to have a quick test of the Script's usage
 
-        # Build a model for each repo.
-        if using_moldescs:
-            temp_df = add_moldescs(temp_df, path2moldesc)
-            targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders_with_moldesc(temp_df,
-                                                                                                       dataset="RepoRT")
-            mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
-        else:
-            inchis_array = temp_df.loc[:, "inchi.std"].values
-            rts = temp_df.loc[:, ["rt"]].values
-            scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=inchis_array,
-                                                                                          target_array=rts)
-            mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
+        if len(temp_df) >= 20:
+            # Build a model for each repo.
+            if using_moldescs:
+                temp_df = add_moldescs(temp_df, path2moldesc)
+                targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders_with_moldesc(temp_df,
+                                                                                                           dataset="RepoRT")
+                mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
+            else:
+                inchis_array = temp_df.loc[:, "inchi.std"].values
+                rts = temp_df.loc[:, ["rt"]].values
+                scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=inchis_array,
+                                                                                              target_array=rts)
+                mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
 
-        test_pred = trainer.predict(mpnn, test_loader)
-        test_pred = np.concatenate(test_pred, axis=0)
-        # GETTING RESULTS
-        print (f"Getting results for the repo {cc_id}")
-        temp_test_df = temp_df.iloc [test_indices[0]]
-        temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False, using_moldescs=using_moldescs)
-        results_array.append(temp_res_table)
-        del mpnn, trainer
+            test_pred = trainer.predict(mpnn, test_loader)
+            test_pred = np.concatenate(test_pred, axis=0)
+            # GETTING RESULTS
+            print (f"Getting results for the repo {cc_id}")
+            temp_test_df = temp_df.iloc [test_indices[0]]
+            temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False, using_moldescs=using_moldescs)
+            results_array.append(temp_res_table)
+            del mpnn, trainer
+        else:
+            cant_train_array.append(cc_id)
+            continue
+    cant_train_df = pd.DataFrame({"Contain <20 molecules":cant_train_array})
+    path2cant_train = os.path.join(path2res, "cant_train.tsv")
     print (f"Writting the final result files in {path2res}...")
+    cant_train_df.to_csv(path2cant_train, sep="\t", index=False)
     res_table = pd.concat (results_array, ignore_index=True)
     res_table.to_csv (path2res+ "Results.tsv", sep = "\t", index = False)
     mae, rmse, mre,rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
