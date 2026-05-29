@@ -29,7 +29,7 @@ import pandas as pd
 # INTERNAL VARIABLES
 SEED_URL = "https://raw.githubusercontent.com/michaelwitting/RepoRT/refs/heads/master/processed_data/"
 PATH2RES = os.path.join(".", "data", "RepoRT", "raw_data/")
-REPOS = np.arange(1, 439)
+REPOS = np.arange(1, 393)
 
 # HELPER FUNCTIONS
 

@@ -39,6 +39,7 @@ from pathlib import Path
 
 from src.RepoRT_data_processing.RepoRT_preprocessing import get_preprocessed_datatable
 from src.RepoRT_data_processing.RepoRT_get_raw_data import merge_complete_file
+from src.RepoRT_data_processing.void_time_detection import detect_putative_void_time
 
 
 # VARIABLES
@@ -55,12 +56,15 @@ DROP_REPO = ["0093", "0150", "0434", "0435"]
 DOUBLET_THRESHOLD = 0.025
 GRAD2DROP_UP = 11
 GRAD2DROP_DOWN = 2
-MOL_FILTER_DOWN = 100
+MOL_FILTER_DOWN = 20
 MOL_FILTER_UP = 5000
 
 RAW_DATA_REPORT = os.path.join (".", "data", "RepoRT", "raw_data", "report_files", "Summary.tsv")
 DROPPED_RAW_DATA_REPORT = os.path.join (".", "data", "RepoRT", "raw_data", "report_files", "Dropped_for_no_gradient.tsv")
 PREPROCESSED_DATA_REPORT = os.path.join (".", "data", "RepoRT_RP", "preprocessed_data", "molecules_dropped_SMRT_byNPLS.tsv")
+
+UNIT = "seconds"
+RT_COL = "rt"
 
 #HELPER FUNCTIONS
 
@@ -347,47 +351,6 @@ def _drop_rt_columns (rt_df,
     _write_rt_dropped_columns_report(columns_to_drop, path2dir, "Report_RT_data_dropped_columns.txt")
     return df
 
-def _write_down_filtering_report(dropped_id_array, size_array, path2dir, down_threshold = MOL_FILTER_DOWN):
-    """
-        Writes a file in the directory indicated with information of the dropped molecules for containing <threshold moelcules
-    """
-
-    final_df = pd.DataFrame({"cc_id":dropped_id_array,
-                            "n molecules": size_array,})
-    final_df.loc["Total"] = final_df.sum(numeric_only=True)
-    filename = f"Report_rt_data_filtered_by_{down_threshold}.tsv"
-    path2file = os.path.join (path2dir, "report_files",filename)
-    final_df.to_csv(path2file, sep='\t', index=False)
-
-def _filer_by_down_threshold (rt_df,
-                              path2dir,
-                              threshold = MOL_FILTER_DOWN):
-    """
-        This function eliminates those repos containing less than the threshold molecules, which is set to 100 molecules as default
-    """
-
-    index_array = np.unique(rt_df["cc_id"])
-    final_df_array, dropped_id_array, size_array = [], [], []
-
-    for index in index_array:
-        temp_df = rt_df[rt_df["cc_id"]==index]
-        if len(temp_df) >= threshold:
-            final_df_array.append(temp_df)
-        else:
-            dropped_id_array.append(index)
-            size_array.append(len(temp_df))
-
-    _write_down_filtering_report(dropped_id_array,
-                                 size_array,
-                                 path2dir,
-                                )
-
-    final_df = pd.concat(final_df_array, ignore_index=True)
-
-    return final_df
-
-
-
 def _get_max_mean_rt_per_cc (rt_df):
     """
         This function get the max and mean rt for every chromatography column and inserts them next to "rt_s" column of the dataframe.
@@ -441,6 +404,7 @@ def _treat_doublets(only_doublet_df, path2dir, doublet_threshold=DOUBLET_THRESHO
     row_array = []
     dropped_doublets_array = []
     summary_dict = {
+        "total_entrees":[0],
         "treated_entrees":[0],
         "dropped_entrees":[0],
         "restant_entrees": [0],
@@ -448,6 +412,7 @@ def _treat_doublets(only_doublet_df, path2dir, doublet_threshold=DOUBLET_THRESHO
     }
     grouped_df = only_doublet_df.groupby (["cc_id", "smiles.std"])
     for _,doublet in grouped_df:
+        summary_dict["total_entrees"] [0] += len(doublet)
         diff = doublet["rt"].max() - doublet["rt"].min()
         # Should not be a problem, as the max_rt should be the same for a repo
         temp_threshold = doublet_threshold * doublet.iloc[0] ["max_rt"]
@@ -487,6 +452,126 @@ def _merge_treated_doublets (no_doublets_rt_df,
     sorted_df = unsorted_df.sort_values(by=["molecule_id"])
     return sorted_df
 
+## Retention analysis
+def _append_void_status (df,
+                         void_status_col,
+                         rt_min_col,
+                         cutoff_col):
+    """
+        I do not know why the classification for the void status from the module is not doing a proper job.
+        This function is basically a very simplified version for the fucntion: _classify_rt_values
+        Here only the retention time in minute column, the cutoff column are considered for classifying:
+            - If rt_min < cutoff -> Putatively non-retained.
+            - If rt_min > cutoff -> Retained (In the original function, this status also depended on the pseudo-k value).
+            - If cutoff is None -> Uncertain.
+    """
+
+    if df[cutoff_col].isna().all():
+        df [void_status_col] = np.array([ "uncertain" for _ in range(len(df))])
+    else:
+        df[void_status_col] = np.array(["retained" if rt >= cutoff else "putatively_non_retained" for rt, cutoff in zip(df[rt_min_col], df[cutoff_col])])
+    return
+
+def _annotate_retained_df (rt_df,
+                           rt_col = RT_COL,
+                           unit = UNIT):
+    """
+        This annotates a pandas DataFrame containing retention time for eliminating non-retained molecules using an heuristic based on KDE.
+    """
+
+    rt_df_copy = rt_df.copy()
+    final_df, result = detect_putative_void_time(rt_df_copy,
+                                                 rt_col=rt_col,
+                                                 units=unit)
+    _append_void_status(final_df,
+                        void_status_col="void_status",
+                        rt_min_col="rt_min",
+                        cutoff_col="early_elution_cutoff"
+                        )
+    return final_df
+
+def _get_only_retained_df (rt_df):
+    """
+        This is the main function to get a dataframe with only retained molecules for the entire dataset.
+    """
+    rt_df_copy = rt_df.copy()
+    final_df_array, dropped_df_array = [], []
+    cc_id_array = np.unique(rt_df_copy ["cc_id"])
+
+    for cc_id in cc_id_array:
+        temp_df = rt_df_copy[rt_df_copy ["cc_id"] == cc_id ]
+        annotated_temp_df = _annotate_retained_df(temp_df)
+
+        final_df_array.append(annotated_temp_df[annotated_temp_df["void_status"] != "putatively_non_retained"])
+        dropped_df_array.append(annotated_temp_df[annotated_temp_df["void_status"] == "putatively_non_retained"])
+
+    final_df = pd.concat(final_df_array, ignore_index=True)
+    dropped_df = pd.concat(dropped_df_array, ignore_index=True)
+
+    final_df = final_df.loc[:,rt_df.columns]
+    # dropped_df = dropped_df.loc[:,rt_df.columns]
+
+    return final_df, dropped_df
+
+def _write_non_retained_mols_report (non_retained_df,
+                                     retained_df,
+                                     path2dir):
+    """
+        Writes a report for the non-retained molecules.
+    """
+
+    path2file = os.path.join (path2dir, "report_files", "dropped_for_non_retained.tsv")
+    path2file2 = os.path.join (path2dir, "report_files", "non_retained_vs_cc.tsv")
+    non_retained_per_cc = pd.DataFrame({ "cc_id": np.unique(non_retained_df["cc_id"]),
+                                         "retained molecules": np.array([len(retained_df[retained_df["cc_id"]==cc_id])
+                                            for cc_id in np.unique(non_retained_df["cc_id"])]),
+                                         "non-retained molecules": np.array([len(non_retained_df[non_retained_df["cc_id"]==cc_id])
+                                                                             for cc_id in np.unique(non_retained_df["cc_id"])])
+    })
+    non_retained_df.to_csv(path2file, sep='\t', index=False)
+    non_retained_per_cc.to_csv(path2file2, sep='\t', index=False)
+
+#Filter by n molecules threshold
+def _write_down_filtering_report(dropped_id_array, size_array, path2dir, down_threshold = MOL_FILTER_DOWN):
+    """
+        Writes a file in the directory indicated with information of the dropped molecules for containing <threshold moelcules
+    """
+
+    final_df = pd.DataFrame({"cc_id":dropped_id_array,
+                            "n molecules": size_array,})
+    final_df.loc["Total"] = final_df.sum(numeric_only=True)
+    filename = f"Report_rt_data_filtered_by_{down_threshold}.tsv"
+    path2file = os.path.join (path2dir, "report_files",filename)
+    final_df.to_csv(path2file, sep='\t', index=False)
+
+def _filer_by_down_threshold (rt_df,
+                              path2dir,
+                              threshold = MOL_FILTER_DOWN):
+    """
+        This function eliminates those repos containing less than the threshold molecules, which is set to 100 molecules as default
+    """
+
+    index_array = np.unique(rt_df["cc_id"])
+    final_df_array, dropped_id_array, size_array = [], [], []
+
+    for index in index_array:
+        temp_df = rt_df[rt_df["cc_id"]==index]
+        if len(temp_df) >= threshold:
+            final_df_array.append(temp_df)
+        else:
+            dropped_id_array.append(index)
+            size_array.append(len(temp_df))
+
+    _write_down_filtering_report(dropped_id_array,
+                                 size_array,
+                                 path2dir,
+                                )
+
+    final_df = pd.concat(final_df_array, ignore_index=True)
+
+    return final_df
+
+
 def _get_processed_rt_df (rt_df,
                           path2dir):
     """
@@ -494,17 +579,21 @@ def _get_processed_rt_df (rt_df,
     """
     print ("Processing Retention time data...")
     rt_df = _drop_rt_columns(rt_df,path2dir)
-    rt_df = _filer_by_down_threshold(rt_df, path2dir)
 
     _get_max_mean_rt_per_cc(rt_df)
     no_doublets_df, doublets_df = _find_doublets(rt_df, path2dir)
     treated_doublets = _treat_doublets(doublets_df, path2dir)
-    final_df = _merge_treated_doublets(no_doublets_df, treated_doublets)
+
+    with_retained_mols_df = _merge_treated_doublets(no_doublets_df, treated_doublets)
+    final_df, dropped_non_retained_df = _get_only_retained_df(with_retained_mols_df)
+    _write_non_retained_mols_report(dropped_non_retained_df, final_df, path2dir)
+
+    final_df = _filer_by_down_threshold(final_df, path2dir)
 
     path2file = os.path.join(path2dir, "processed_rt_data.tsv")
     final_df.to_csv(path2file, sep="\t", index=False)
 
-    return final_df
+    return final_df, dropped_non_retained_df
 
 # DEFINE CC PROCESSING FUNCTION
 def _write_dropped_repos_by_eluent (rt_df,
@@ -610,7 +699,7 @@ def _drop_grad_data_by_up_threshold (grad_df,
         Remember here the NaN values still are there, not filled with 0 yet.
     """
     threshold_column = f"t [min]_{up_threshold}"
-    previous_column = f"D [%]_{up_threshold-1}"
+    previous_column = f"flow rate [ml/min]_{up_threshold}"
     final_df = grad_df[grad_df[threshold_column].isna()].loc[:, :previous_column]
     dropped_repos = grad_df.loc [~grad_df["cc_id"].isin(final_df["cc_id"]), "cc_id"].values
     _write_dropped_grad_up_filter_report(dropped_repos,
@@ -625,7 +714,7 @@ def _drop_gradient_data_columns (grad_df):
         As now the eluent B and C are eliminated, these % data should be eliminated.
     """
     final_df = grad_df.copy()
-    dropped_columns = [ column for column in grad_df.columns if "C [%]" in column or "D [%]" in column ]
+    dropped_columns = [ column for column in grad_df.columns if "A [%]" in column or "C [%]" in column or "D [%]" in column ]
     final_df.drop(columns=dropped_columns, inplace=True)
     return final_df
 
@@ -672,6 +761,7 @@ def _get_complete_processed_data (rt_df, cc_df, grad_df, path2dir):
 
 
 def _write_complete_dropped_summary (path2dir,
+                                     non_retention_df,
                                      raw_data_report = RAW_DATA_REPORT,
                                      dropped_raw_data=DROPPED_RAW_DATA_REPORT,
                                      preprocessed_data_report=PREPROCESSED_DATA_REPORT,
@@ -689,7 +779,8 @@ def _write_complete_dropped_summary (path2dir,
                         "Dropped SMRT by NPLS",
                         "Dropped by manual curation",
                         "Dropped for duplicated cc and doublets",
-                        f"Dropped for containing less than {mol_threshold}",
+                        f"Dropped non-retained molecules",
+                        f"Dropped for containing less than {mol_threshold} after all processing" ,
                         "Dropped for containing eluents C and/or D",
                         f"Dropped for containing more than {gradient_threshold} segments",
                         f"Total dropped molecules",
@@ -725,8 +816,9 @@ def _write_complete_dropped_summary (path2dir,
                                        dropped_SMRT,
                                        manually_curated,
                                        dropped_doublets,
-                                       down_filtered_mols,
-                                       dropped_eluent_mols,
+                                       len(non_retention_df),
+                                        down_filtered_mols,
+                                        dropped_eluent_mols,
                                        dropped_gradient_mols,
                                        0.0])
 
@@ -740,7 +832,7 @@ def _write_complete_dropped_summary (path2dir,
 def get_processed_df_from_raw (source_path = SOURCE_PATH,
                                drop_smrt = True,
                                down_grad_filter = False,
-                               smrt_id = "cc_127",
+                               smrt_id = "cc_125",
                                ):
     """
         This function will build an entire directory containing the rt data, cc data, grad data and all the report files,
@@ -779,7 +871,7 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
     os.makedirs(os.path.join(path2dir, "report_files/"), exist_ok = True)
 
     print ("Getting processed rt data...")
-    processed_rt_df = _get_processed_rt_df(no_same_cc_rt_df,
+    processed_rt_df, dropped4retention_df = _get_processed_rt_df(no_same_cc_rt_df,
                                            path2dir=path2dir,
                                           )
 
@@ -798,7 +890,7 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
                                  processed_grad_df,
                                  path2dir)
     _write_complete_info_report(complete_df, path2dir, "Report_complete_info.tsv")
-    _write_complete_dropped_summary(path2dir)
+    _write_complete_dropped_summary(path2dir, dropped4retention_df)
 
     print (f"All the file saved in {path2dir}!!")
 
