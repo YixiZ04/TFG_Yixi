@@ -22,10 +22,11 @@ from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
 
 # BUILD AND CONFIGURE chemprop.MPNN.
-def get_dataloaders (feature_array, target_array, type="inchi"):
+def get_dataloaders (feature_array, target_array, type="inchi", split_by_scaffold=False):
     """
     Input: a pandas dataframe containing the information for training.
-    Outputs: Scaler used for scaling the targets. Train, val and test dataloaders built from the the dataframe. An array contaning the test indices.
+    New option given: whether to use Bemis-Murcko Scaffold or not. Default: False
+    Outputs: Scaler used for scaling the targets. Train, val and test dataloaders built from the the dataframe. An array containing the test indices.
     """
     # Convert the raw data to mol objects for getting the graph representation
     match type:
@@ -40,12 +41,20 @@ def get_dataloaders (feature_array, target_array, type="inchi"):
     #Get datapoints
 
     # Train_test_val_split. Splitting regarding the structure.
-    train_indices, val_indices, test_indices = data.make_split_indices(
-        mols,
-        "random",
-        (0.8, 0.1, 0.1),
-        seed=42,
-    )
+    if split_by_scaffold:
+        train_indices, val_indices, test_indices = data.make_split_indices(
+            mols,
+            "SCAFFOLD_BALANCED",
+            (0.8, 0.1, 0.1),
+            seed=42,
+        )
+    else:
+        train_indices, val_indices, test_indices = data.make_split_indices(
+            mols,
+            "random",
+            (0.8, 0.1, 0.1),
+            seed=42,
+        )
 
     train_data, val_data, test_data = data.split_data_by_indices(
         all_data, train_indices, val_indices, test_indices
@@ -69,7 +78,6 @@ def get_dataloaders (feature_array, target_array, type="inchi"):
     test_loader = data.build_dataloader(test_dset, num_workers=5, shuffle=False, persistent_workers=True)
 
     return scaler,train_loader, val_loader, test_loader, test_indices
-
 
 def configure_and_train_mpnn (scaler,
                               train_loader,

@@ -1,19 +1,7 @@
 """
-Name: RepoRT_MPNN_each_repo.py
-Author: Yixi Zhang
-Date: March 2026/April 2026
-Version: 1.2.
-Usege: Builds individuals MPNN using data from every RepoRT's subsets (0001, 0002...
-In total, there will be 3 main result files saved in the result directory (should be defined):
-    1. metric.txt. This file contains the aggregated metrics (MAE, RMSE, %errors) calculated from Results.tsv. Might not be as interesting as the last result file,
-    but it is interesting if wanted to have a quick idea of the difference of the results.
-    2. Parameters.txt: a txt file containing the parameters used for building the MPNN. It is shared by all repositories.
-    3. Results.tsv: a tsv file containing the prediction results for each subset of RepoRT.
-    4. metrics_per_cc.tsv. This is the original "Metrics.tsv", but this now contains more results metrics (%error to mean and max RT).
-Update: This will use the total processed RepoRT dataset for making sure that the repos used in this Script corresponds with the repos remaining after processing.
-With this update, very similar Scripts will be removed and the results will be comparable to those obtained with models trained using all data.
-The result files are the exact same as the result files for other cases (random_split e.g.).The only difference being on how those results are obtained.
-Update (1.2): added option to train models with moldescs
+    Name: model_per_repo_scaffold.main
+    Author: Yixi Zhang
+    The splitting type within each repository is by Bemis-Murcko scaffold. Which implies that in the train-test-val, each will contain different molecule class.
 """
 
 # IMPORT THE FUNCTIONS NEEDED
@@ -37,7 +25,7 @@ apply_grad_down_threshold = False                                               
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
 using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "29_05_2026/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo_scaffold", "29_05_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
@@ -112,7 +100,8 @@ if __name__ == "__main__":
                 rts = temp_df.loc[:, ["rt"]].values
                 scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=smiles_array,
                                                                                               target_array=rts,
-                                                                                              type="smiles")
+                                                                                              type="smiles",
+                                                                                              split_by_scaffold=True)
                 mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
 
             test_pred = trainer.predict(mpnn, test_loader)
