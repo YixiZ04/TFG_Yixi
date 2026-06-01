@@ -85,37 +85,39 @@ if __name__ == "__main__":
     #Training process.
     cc_id_array = np.unique (df["cc_id"])
     results_array = []          # This array will be used store dfs to build a large df for results, where all the metrics will be calculated.
-    for cc_id in cc_id_array:
+    for cc_id in ["cc_73", "cc_74", "cc_0"]:
         temp_df = df[df["cc_id"] == cc_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
 
-        if len(temp_df) >= 20:
-            # Build a model for each repo.
-            if using_moldescs:
-                temp_df = add_moldescs(temp_df, path2moldesc)
-                targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders_with_moldesc(temp_df,
-                                                                                                           dataset="RepoRT")
-                mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
-            else:
-                smiles_array = temp_df.loc[:, "smiles.std"].values
-                rts = temp_df.loc[:, ["rt"]].values
-                scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=smiles_array,
-                                                                                              target_array=rts,
-                                                                                              type="smiles",
-                                                                                              split_by_scaffold=True)
-                mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
-
-            test_pred = trainer.predict(mpnn, test_loader)
-            test_pred = np.concatenate(test_pred, axis=0)
-            # GETTING RESULTS
-            print (f"Getting results for the repo {cc_id}")
-            temp_test_df = temp_df.iloc [test_indices[0]]
-            temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False, using_moldescs=using_moldescs)
-            results_array.append(temp_res_table)
-            del mpnn, trainer
+        # Build a model for each repo.
+        if using_moldescs:
+            temp_df = add_moldescs(temp_df, path2moldesc)
+            targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders_with_moldesc(temp_df,
+                                                                                                       dataset="RepoRT")
+            mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
         else:
-            cant_train_array.append(cc_id)
-            continue
-    cant_train_df = pd.DataFrame({"Contain <20 molecules":cant_train_array})
+            smiles_array = temp_df.loc[:, "smiles.std"].values
+            rts = temp_df.loc[:, ["rt"]].values
+            try:
+                scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders(feature_array=smiles_array,
+                                                                                          target_array=rts,
+                                                                                          type="smiles",
+                                                                                          split_by_scaffold=True)
+                mpnn, trainer = configure_and_train_mpnn(scaler, train_loader, val_loader, param_dict, path2res, save_model=False)
+                test_pred = trainer.predict(mpnn, test_loader)
+                test_pred = np.concatenate(test_pred, axis=0)
+                # GETTING RESULTS
+                print(f"Getting results for the repo {cc_id}")
+                temp_test_df = temp_df.iloc[test_indices[0]]
+                temp_res_table = get_res_table(temp_test_df, test_pred, path2res, save_results=False,
+                                               using_moldescs=using_moldescs)
+                results_array.append(temp_res_table)
+                del mpnn, trainer
+            except:
+                print (f"{cc_id} does not contain > 3 Bermis-Murcko scaffolds")
+                cant_train_array.append(cc_id)
+                continue
+
+    cant_train_df = pd.DataFrame({"Contain not enough ms scaffolds":cant_train_array})
     path2cant_train = os.path.join(path2res, "cant_train.tsv")
     print (f"Writting the final result files in {path2res}...")
     cant_train_df.to_csv(path2cant_train, sep="\t", index=False)
