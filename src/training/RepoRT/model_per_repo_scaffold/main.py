@@ -85,7 +85,7 @@ if __name__ == "__main__":
     #Training process.
     cc_id_array = np.unique (df["cc_id"])
     results_array = []          # This array will be used store dfs to build a large df for results, where all the metrics will be calculated.
-    for cc_id in ["cc_73", "cc_74", "cc_0"]:
+    for cc_id in cc_id_array:
         temp_df = df[df["cc_id"] == cc_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
 
         # Build a model for each repo.
