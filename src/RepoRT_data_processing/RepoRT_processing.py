@@ -1,32 +1,48 @@
 """
     Name: RepoRT_processing.py
     Author: Yixi Zhang
-    Description:
-    This includes a processing for duplicated chromatography conditions. Those who share the same cc is unified into another unique id;
-    and all the processing is done using the new unique ID (cc_id)
-    NOTE: The repeated molecules are considered as "doublets" within the new id.
 
-    Some dir_ids are eliminated beforehand, since their cc is the same, but the RT data is not consistent with this fact.
+    The processing is done separately to the RT data, cc data and gradient data. And many sanity check files are created and saved in
+    path2savingdir/report_files/ . After processing for each table is done, they are merged on the "cc_id" yielding a complete processed data file.
 
-    This performs the processing on preprocessed RepoRT data:
-        1. Eliminates columns that are not useful. Such as comment, classyfires columns.
-        (The molecule name is not eliminated as it can be useful for later to identify the molecules easier).
-        2. Drop those molecules having > 12 segments gradients and those having < 3 segments (This is optional)
-        3. Drop those repos that contains < 100 molecules (This is the default value, but it can be changed).
-        3. Get max and mean RT for each repository, merge them to each molecule according the dir_id (**cc_id).
-        4. Doublets treating: if the difference is > threshold, the doublet is elimated, else the mean value is considered.
+    Pipeline for processing of RT data:
 
+        1. Combine those repos with the same cc (chromatography condition) under a new unique id named "cc_id".
+           This cc_id is used for the rest of processing to indentify a cc -> There would be a mapping df to map the dir_id of gradient and cc data
+           to cc_id.
+        2. Eliminate some columns that are not any relevant to the training. (Classfiry. containing ones e.g.)
+        3. Compute the max and the mean RT for a cc.
+        4. Treat the doublets. Here, those molecules having the same SMILES under the same cc_id are considered as doublets. (Remember those dir_id
+           having the exact same cc are merged into a single cc_id).
+           4.1. The processing is quite simple: for each doublet compute this difference max(rt) - min(rt). If this difference is greater than a threshold,
+                set to 2.5% of the max_RT of the cc_id as default; the doublet is dropped, else a single entree is kept with the mean(rt_doublet).
+        5. Elimination of non-retained molecules. This is achieved by using a KDE (Kernel Density Estimation) based algorithm (see .void_time_detection.py).
+           Here, the algorithm is implemented for checking the non-retained molecules cc to cc, and concatenate the resulting array to a single df.
+        6. After all this process, a filter for molecule count is implemented. The default value is 20, as with less than 20 molecules a model can not be
+           trained.
+
+    Pipeline for processing the cc data:
+        1. Identify those cc who contains eluent C and D -> These are dropped for a tighter cc embedding.
+        2. Eliminate columns in the cc data containing composition of eluents C and D.
+
+    Pipeline for processing the gradient data:
+        1. Apply the gradient filter. By default, those gradient data containing >= 12 segments are dropped. And optionally, those containing <= 3 segments
+           could also be dropped.
+        2. Eliminate columns containing A[%], C[%] and D[%], and only kept the information of B[%], t (s) and flowrate for each segment.
+
+    Results:
     There are 2 parameters to control: drop_smrt and down_grad_filter, and in total 4 processed dataset can be built and saved:
-        1. no_SMRT -> eliminated SMRT (cc_id = cc_127) and not eliminated those repos with < 3 segments.
+        1. no_SMRT -> eliminated SMRT (cc_id = cc_125) and not eliminated those repos with < 3 segments.
         2. with_SMRT -> Kept SMRT and not eliminated those repos with < 3 segments.
         3. no_SMRT_down_grad_filter -> eliminated SMRT and eliminated those repos with < 3 segments.
         4. with_SMRT_down_grad_fileter -> Kept SMRT and eliminated those repos with < 3 segments.
     Note: The downsampling mechanism has been completely depricated, as it is not consistent at all, specially when considering doublet treating.
-    Note: Now, when including SMRT, this dataset is the one filtered by NPLS using the threshold defined in preprocessing Script.
+    Note: The SMRT data has been filtered by a threshold for NPLS in the preprocessing.
     Note: There are several repos dropped by manually curation:
         1. 0093 and 0150 -> These are dropped because of that they have the same cc to some others, but in reality, the sample preparation is different, thus the
            results should be different.
         2. 0434 and 0435 -> Even though these have the same cc, but their methods seem to be different: RP and HILIC.
+    NOTE: SMRT's cc_id might need to be manually adjusted depending on the repos we are using -> cc_125 if only using repos <= 0392, cc_127 if all.
 """
 # IMPORT MODULES AND SCRIPTS
 
