@@ -356,7 +356,7 @@ def _get_max_mean_rt_per_cc (rt_df):
         This function get the max and mean rt for every chromatography column and inserts them next to "rt_s" column of the dataframe.
         Updates the input_dataframe.
     """
-    max_array, mean_array = [], []
+    final_df_array = []
     index_array = np.unique (rt_df["cc_id"])
     for index in index_array:
         temp_df = rt_df [rt_df ["cc_id"] == index]
@@ -364,12 +364,14 @@ def _get_max_mean_rt_per_cc (rt_df):
         max_rt = np.max (temp_df["rt"])
         temp_max_array = [ max_rt for _ in range (temp_df.shape[0])]
         temp_mean_array = [ mean_rt for _ in range (temp_df.shape [0])]
-        max_array = max_array + temp_max_array
-        mean_array = mean_array + temp_mean_array
 
-    position = rt_df.columns.get_loc ("rt")
-    rt_df.insert (position + 1, "max_rt", max_array)
-    rt_df.insert (position + 2, "mean_rt", mean_array)
+        position = temp_df.columns.get_loc ("rt")
+        temp_df.insert (position + 1, "max_rt", temp_max_array)
+        temp_df.insert (position + 2, "mean_rt", temp_mean_array)
+        final_df_array.append(temp_df)
+
+    final_df = pd.concat(final_df_array, ignore_index = True)
+    return final_df
 #Doublets treating functions
 
 def _find_doublets(rt_df, path2dir):
@@ -580,7 +582,7 @@ def _get_processed_rt_df (rt_df,
     print ("Processing Retention time data...")
     rt_df = _drop_rt_columns(rt_df,path2dir)
 
-    _get_max_mean_rt_per_cc(rt_df)
+    rt_df = _get_max_mean_rt_per_cc(rt_df)
     no_doublets_df, doublets_df = _find_doublets(rt_df, path2dir)
     treated_doublets = _treat_doublets(doublets_df, path2dir)
 
