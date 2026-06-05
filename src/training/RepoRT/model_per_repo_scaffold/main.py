@@ -23,9 +23,9 @@ SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")         
 dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
 apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
+using_moldescs = True                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo_scaffold", "29_05_2026/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo_scaffold", "01_06_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
@@ -85,15 +85,32 @@ if __name__ == "__main__":
     #Training process.
     cc_id_array = np.unique (df["cc_id"])
     results_array = []          # This array will be used store dfs to build a large df for results, where all the metrics will be calculated.
-    for cc_id in cc_id_array:
+    for cc_id in ["cc_0", "cc_1"]:
         temp_df = df[df["cc_id"] == cc_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
 
         # Build a model for each repo.
         if using_moldescs:
-            temp_df = add_moldescs(temp_df, path2moldesc)
-            targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders_with_moldesc(temp_df,
-                                                                                                       dataset="RepoRT")
-            mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
+            try:
+                temp_df = add_moldescs(temp_df, path2moldesc)
+                targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders_with_moldesc(temp_df,
+                                                                                                           dataset="RepoRT")
+                mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
+                test_pred = trainer.predict(mpnn, test_loader)
+                test_pred = np.concatenate(test_pred, axis=0)
+                # GETTING RESULTS
+                print(f"Getting results for the repo {cc_id}")
+                temp_test_df = temp_df.iloc[test_indices[0]]
+                temp_res_table = get_res_table(temp_test_df,
+                                               test_pred,
+                                               path2res,
+                                               save_results=False,
+                                               using_moldescs=using_moldescs)
+                results_array.append(temp_res_table)
+                del mpnn, trainer
+            except:
+                print(f"{cc_id} does not contain > 3 Bermis-Murcko scaffolds")
+                cant_train_array.append(cc_id)
+                continue
         else:
             smiles_array = temp_df.loc[:, "smiles.std"].values
             rts = temp_df.loc[:, ["rt"]].values
