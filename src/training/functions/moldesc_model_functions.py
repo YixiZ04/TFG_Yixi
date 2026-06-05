@@ -13,6 +13,8 @@ from lightning import pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 import torch
 
+from pathlib import Path
+
 def get_dataloaders_with_moldesc (df, dataset = "SMRT"):
     """
     A DATAFRAME with molecular descriptors is required.
@@ -76,9 +78,17 @@ def get_dataloaders_with_moldesc (df, dataset = "SMRT"):
     return targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices
 
 
-def configure_and_train_mpnn_moldesc (target_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, results_path, save_model = True):
+def configure_and_train_mpnn_moldesc (target_scaler,
+                                      mol_descs_scaler,
+                                      train_loader,
+                                      val_loader,
+                                      param_dict,
+                                      results_path,
+                                      save_model = True,
+                                      rm_ckpt=True):
     """
-    Used for configure and train a chemprop model using Trainer from lightning.pytorch
+    Used for configure and train a chemprop model using Trainer from lightning.pytorch.
+    New Boolean: rm_ckpt, default is True, so all the checkpoint files are eliminated after training has completed.
     """
     # Build the model with the mol_desc_scaler
 
@@ -137,6 +147,9 @@ def configure_and_train_mpnn_moldesc (target_scaler, mol_descs_scaler, train_loa
     if save_model:
         save_model_path = results_path + "model.pt"
         torch.save (mpnn.state_dict(), save_model_path)
+    if rm_ckpt:
+        for ckpt in Path(results_path).glob("*.ckpt"):
+            ckpt.unlink()
     return mpnn, trainer
 
 # RESULTS
