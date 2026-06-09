@@ -43,6 +43,15 @@
            results should be different.
         2. 0434 and 0435 -> Even though these have the same cc, but their methods seem to be different: RP and HILIC.
     NOTE: SMRT's cc_id might need to be manually adjusted depending on the repos we are using -> cc_125 if only using repos <= 0392, cc_127 if all.
+
+    Update: As the processing was done df by df, meaning that each rt_df, cc_df and grad_df were processed separately and merged after all processed,
+    this would not raise any problems when getting the final data, but it is a problem when writting sanity check files.
+    This is mainly due to that rt_df contains RT data for directories that does not contain gradient data, which in the complete df will be dropped by not having the
+    corresponding dir_id in the gradient data. However, these RT data will be used in the doublet and non-retention analysis, meaning that in the sanity check files
+    some of these molecules would be added twice thus yielding inconsistent results of final size. Now this is correct.
+
+    And for the record, the sanity check file when dropping SMRT is not the most correct one, consider using the file obtained when not dropping SMRT and just substract the
+    size of filtered SMRT.
 """
 # IMPORT MODULES AND SCRIPTS
 
@@ -76,6 +85,8 @@ MOL_FILTER_DOWN = 20
 MOL_FILTER_UP = 5000
 
 RAW_DATA_REPORT = os.path.join (".", "data", "RepoRT", "raw_data", "report_files", "Summary.tsv")
+ALL_RAW_DATA = os.path.join (".", "data", "RepoRT", "raw_data", "complete_raw_data.tsv")
+RP_RAW_DATA = os.path.join (".", "data", "RepoRT_RP", "raw_data","complete_raw_data.tsv")
 DROPPED_RAW_DATA_REPORT = os.path.join (".", "data", "RepoRT", "raw_data", "report_files", "Dropped_for_no_gradient.tsv")
 PREPROCESSED_DATA_REPORT = os.path.join (".", "data", "RepoRT_RP", "preprocessed_data", "molecules_dropped_SMRT_byNPLS.tsv")
 
@@ -107,9 +118,12 @@ def _get_raw_input_df (rt_input,
 
 def _get_input_df (rt_input = PATH2RT,
                    cc_input = PATH2CC,
-                   grad_input = PATH2GRAD):
+                   grad_input = PATH2GRAD,
+                   drop_repo=DROP_REPO,):
     """
         This function checks for the input files and loads then as pd.DataFrames.
+        Update: Also expands the drop_repo to those that has no gradient data.
+
     """
     print ("Cheking for the input files...")
     if (not Path(rt_input).exists() or
@@ -124,7 +138,18 @@ def _get_input_df (rt_input = PATH2RT,
     cc_df = pd.read_csv(cc_input, sep='\t', dtype={"dir_id":str})
     grad_df = pd.read_csv(grad_input, sep='\t', dtype={"dir_id":str})
 
-    return rt_df, cc_df, grad_df
+    print (f"Obtaining dir id for those repos with no gradient data...")
+
+    rt_dir_id = np.unique (rt_df["dir_id"])
+    grad_dir_id = np.unique(grad_df["dir_id"])
+
+    concatenated_dirids, count = np.unique(np.concatenate((rt_dir_id, grad_dir_id)), return_counts=True)
+
+    no_grad_dirids = list(concatenated_dirids[count == 1])
+
+    expanded_drop_repo = drop_repo + no_grad_dirids
+
+    return rt_df, cc_df, grad_df, expanded_drop_repo
 
 
 def _write_dropped_cc_columns_report (dropped_columns_array, path2dir, filename):
@@ -781,6 +806,8 @@ def _get_complete_processed_data (rt_df, cc_df, grad_df, path2dir):
 def _write_complete_dropped_summary (path2dir,
                                      non_retention_df,
                                      raw_data_report = RAW_DATA_REPORT,
+                                     all_raw_data = ALL_RAW_DATA,
+                                     rp_raw_dara = RP_RAW_DATA,
                                      dropped_raw_data=DROPPED_RAW_DATA_REPORT,
                                      preprocessed_data_report=PREPROCESSED_DATA_REPORT,
                                      mol_threshold=MOL_FILTER_DOWN,
@@ -808,7 +835,9 @@ def _write_complete_dropped_summary (path2dir,
     report_files_dir = os.path.join (path2dir, "report_files/")
     # Read Report files
     preprocessed_df =pd.read_csv (preprocessed_rt_path, sep='\t', dtype={"dir_id":str})
-    raw_data_summary_df = pd.read_csv (raw_data_report, sep = "\t", index_col = 0)
+    raw_data_summary_df = pd.read_csv(raw_data_report, sep="\t", index_col=0)
+    all_raw_data_df = pd.read_csv (all_raw_data, sep = "\t", index_col = 0)
+    rp_raw_data = pd.read_csv (rp_raw_dara, sep="\t", index_col = 0)
     dropped_raw_data_df = pd.read_csv (dropped_raw_data, sep='\t', index_col=0)
     preprocessed_data_report_df = pd.read_csv (preprocessed_data_report, sep = '\t')
     doublets_count_df = pd.read_csv (os.path.join(report_files_dir, "doublets_count.tsv"), sep='\t')
@@ -818,9 +847,9 @@ def _write_complete_dropped_summary (path2dir,
 
     # Metrics
     total_molecules = raw_data_summary_df.loc["Total","n molecules"]
-    rp_molecules = total_molecules - raw_data_summary_df[raw_data_summary_df["type"] == "RP"] ["n molecules"].sum()
     dropped4no_grad = dropped_raw_data_df.loc["Total", "n molecules"]
     dropped_SMRT = float(preprocessed_data_report_df.loc[0,"n molecules"])
+    rp_molecules = len(all_raw_data_df) - len(rp_raw_data)
     manually_curated = len(preprocessed_df[preprocessed_df["dir_id"].isin(dropped_repos)])
     dropped_doublets = float(doublets_count_df.loc [0, "total_dropped_entrees"])
     down_filtered_mols = down_filtered_df["n molecules"].sum() / 2
@@ -828,17 +857,17 @@ def _write_complete_dropped_summary (path2dir,
     dropped_gradient_mols = dropped4gradient ["n molecules"].sum() / 2
 
 
-    temp_dict ["n molecules"]=np.array([total_molecules,
-                                       dropped4no_grad,
-                                       float(rp_molecules),
-                                       dropped_SMRT,
-                                       manually_curated,
-                                       dropped_doublets,
-                                       len(non_retention_df),
-                                        down_filtered_mols,
-                                        dropped_eluent_mols,
-                                       dropped_gradient_mols,
-                                       0.0])
+    temp_dict ["n molecules"]=[total_molecules,
+                               dropped4no_grad,
+                               float(rp_molecules),
+                               dropped_SMRT,
+                               manually_curated,
+                               dropped_doublets,
+                               len(non_retention_df),
+                               down_filtered_mols,
+                               dropped_eluent_mols,
+                               dropped_gradient_mols,
+                               0.0]
 
     final_df = pd.DataFrame (temp_dict)
     mask = (final_df["Description"] == "Total dropped molecules")
@@ -861,7 +890,7 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
             - Not containing SMRT and eliminated those repositories with less than down_grad_filter segments.
         The up_grad_filter and down_mol_filter will be applied to ALL cases.
     """
-    rt_df, cc_df, grad_df = _get_input_df()
+    rt_df, cc_df, grad_df, expanded_drop_repo = _get_input_df()
     os.makedirs(source_path, exist_ok=True)
     no_same_cc_rt_df, no_same_cc_cc_df, no_same_cc_grad_df = _duplicated_cc_main(PATH2RAW_RT,
                                                                                  PATH2RAW_CC,
@@ -869,7 +898,7 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
                                                                                  rt_df,
                                                                                  cc_df,
                                                                                  grad_df,
-                                                                                 DROP_REPO,
+                                                                                 expanded_drop_repo,
                                                                                  source_path)
     print ("Cheking for the output directory...")
     if drop_smrt:
@@ -890,8 +919,8 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
 
     print ("Getting processed rt data...")
     processed_rt_df, dropped4retention_df = _get_processed_rt_df(no_same_cc_rt_df,
-                                           path2dir=path2dir,
-                                          )
+                                                                 path2dir=path2dir,
+                                                                )
 
     print ("Getting processed cc data...")
     processed_cc_df  =_drop_cc_columns(no_same_cc_cc_df,
@@ -899,14 +928,14 @@ def get_processed_df_from_raw (source_path = SOURCE_PATH,
                                        path2dir)
     print ("Getting processed grad_data...")
     processed_grad_df = _get_processed_grad_df(no_same_cc_grad_df,
-                                               rt_df=no_same_cc_rt_df,
+                                               rt_df=processed_rt_df,
                                                path2dir=path2dir,
                                                apply_down_filtering=down_grad_filter)
     print ("Getting the complete processed data...")
     complete_df = _get_complete_processed_data(processed_rt_df,
-                                 processed_cc_df,
-                                 processed_grad_df,
-                                 path2dir)
+                                               processed_cc_df,
+                                               processed_grad_df,
+                                               path2dir)
     _write_complete_info_report(complete_df, path2dir, "Report_complete_info.tsv")
     _write_complete_dropped_summary(path2dir, dropped4retention_df)
 

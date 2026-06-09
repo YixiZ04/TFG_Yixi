@@ -258,7 +258,7 @@ def _get_final_summary_df (rt_summary_df,
 
     mask = (
             (grad_summery_df["grad_status"] != "Empty data table") &
-            (grad_summery_df["grad_status"] != "Gradient.tsv not fuond")
+            (grad_summery_df["grad_status"] != "Gradient.tsv not found")
     )
 
     dropped_dirid = grad_summery_df.loc[mask, "dir_id"]
