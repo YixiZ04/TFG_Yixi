@@ -1,0 +1,5 @@
+MAE: 68.2021 s
+RMSE: 133.7336 s.
+MRE: 19.9150 %
+Relative error to max rt (%): 6.9915
+Relative error to mean rt (%): 18.4418
