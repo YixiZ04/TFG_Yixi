@@ -109,7 +109,7 @@ def split_dataset_into_k_folds(df, objective_dict, size_dict, column_name):
 # Model_per_repo functions
 ###############################################################################################
 
-def mpr_get_train_loader (train_df):
+def mpr_get_train_loader (train_df, using_moldescs):
     """
         This is different to any other similar functions. As it takes a TRAIN DataFrame only.
         Also, the input data (metadata and gradient data) does not need scaling as they will be the same for all molecules.
@@ -119,9 +119,15 @@ def mpr_get_train_loader (train_df):
     rt_array = train_df.loc [:,["rt"]].values
     inchi_array = train_df.loc[:, "inchi.std"].values
     smiles_array = train_df.loc [:, "smiles.std"].values
-
     mols = [ MolFromSmiles(smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles,inchi in zip(smiles_array, inchi_array)]
-    all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
+
+    if using_moldescs:
+        moniso_mws = train_df.loc[:, ["mono_iso_mass"]].values
+        xlogps = train_df.loc[:, ["xlogp"]].values
+        mol_descs = np.concatenate([moniso_mws, xlogps], axis=1)
+        all_data = [[data.MoleculeDatapoint(mol, rt, x_d=X_d) for mol, rt,X_d in zip(mols, rt_array, mol_descs)]]
+    else:
+        all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
 
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer ()
     train_dset = data.MoleculeDataset(all_data[0], featurizer)
@@ -132,15 +138,23 @@ def mpr_get_train_loader (train_df):
                                          seed=RANDOM_SEED)
     return train_loader, train_scaler
 
-def mpr_get_val_loader (val_df, train_scaler):
+def mpr_get_val_loader (val_df, train_scaler, using_moldescs):
     """
         Same as the previous function's description
     """
     rt_array = val_df.loc[:, ["rt"]].values
     inchi_array = val_df.loc[:, "inchi.std"].values
     smiles_array = val_df.loc[:, "smiles.std"].values
-    mols = [ MolFromSmiles(smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles,inchi in zip(smiles_array, inchi_array)]
-    all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
+    mols = [MolFromSmiles(smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles, inchi in
+            zip(smiles_array, inchi_array)]
+
+    if using_moldescs:
+        moniso_mws = val_df.loc[:, ["mono_iso_mass"]].values
+        xlogps = val_df.loc[:, ["xlogp"]].values
+        mol_descs = np.concatenate([moniso_mws, xlogps], axis=1)
+        all_data = [[data.MoleculeDatapoint(mol, rt, x_d=X_d) for mol, rt, X_d in zip(mols, rt_array, mol_descs)]]
+    else:
+        all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
 
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
     val_dset = data.MoleculeDataset(all_data[0], featurizer)
@@ -151,17 +165,23 @@ def mpr_get_val_loader (val_df, train_scaler):
                                         shuffle=False)
     return val_loader
 
-def mpr_get_test_loader (test_df):
+def mpr_get_test_loader (test_df, using_moldescs):
     """
         See description for function "mpr_get_train_loader".
         The targets are not scaled.
     """
-    rt_array = test_df.loc[:, ["rt"]].values
+    rt_array = test_df.loc [:,["rt"]].values
     inchi_array = test_df.loc[:, "inchi.std"].values
-    smiles_array = test_df.loc[:, "smiles.std"].values
-
+    smiles_array = test_df.loc [:, "smiles.std"].values
     mols = [ MolFromSmiles(smiles, sanitize=True) or MolFromInchi(inchi, sanitize=True) for smiles,inchi in zip(smiles_array, inchi_array)]
-    all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
+
+    if using_moldescs:
+        moniso_mws = test_df.loc[:, ["mono_iso_mass"]].values
+        xlogps = test_df.loc[:, ["xlogp"]].values
+        mol_descs = np.concatenate([moniso_mws, xlogps], axis=1)
+        all_data = [[data.MoleculeDatapoint(mol, rt, x_d=X_d) for mol, rt,X_d in zip(mols, rt_array, mol_descs)]]
+    else:
+        all_data = [[data.MoleculeDatapoint(mol, rt) for mol, rt in zip(mols, rt_array)]]
 
     featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
     test_dset = data.MoleculeDataset(all_data[0], featurizer)
