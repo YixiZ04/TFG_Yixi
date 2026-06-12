@@ -157,7 +157,7 @@ def get_res_table (df, pred_array, test_indices):
     Input: An array containing InChi, another containing target and last one containing the prediction (Test set)
     Output: A pandas dataframe with the prediction table. The exportation should be done outside the function.
     """
-    inchi_array = df.loc [:, "inchi"].values
+    inchi_array = df.loc [:, "inchi.std"].values
     rt_array = df.loc [:, "rt"].values
     inchis = []
     real_rt = []

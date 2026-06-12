@@ -1,6 +1,5 @@
 """
     Performs the k-fold crossvalidation for model_per_repo.
-
 """
 #IMPORT MODULES
 import os
@@ -12,10 +11,11 @@ from sklearn.model_selection import KFold
 from lightning import pytorch as pl
 from chemprop import data, nn, models, featurizers
 
-from src.training.functions.splitted_sets_functions import get_res_table, metrics_from_dataframe
-from src.training.functions.basic_model_functions import  configure_and_train_mpnn
+from src.training.functions.basic_model_functions import configure_and_train_mpnn
 from src.training.functions.k_fold_functions import *
 from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
+from src.training.functions.splitted_sets_functions import *
+from src.training.functions.moldesc_model_functions import configure_and_train_mpnn_moldesc
 
 #K-Fold parameters
 
@@ -28,12 +28,12 @@ RANDOM_SEED = 42
 
 # DEFINE PARAMETERS
 SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
+dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
 apply_grad_down_threshold = False                                                     # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
+using_moldescs = False                                                                     # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_28_04_2026/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_06_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     cc_id_array = np.unique(input_df ["cc_id"])
 
-    res_path = os.path.join ("./tmp/")           #Does not really matter, only for temporal saving
+    res_path = os.path.join ("./tmp_2/")           #Does not really matter, only for temporal saving
     os.makedirs(res_path, exist_ok=True)
 
     res_dfs_array = []
@@ -105,6 +105,7 @@ if __name__ == "__main__":
         "rel_max_rt_error": [],
         "rel_mean_rt_error": [],
     }
+    all_results = []
     for cc_id in cc_id_array:
         temp_df = input_df[input_df["cc_id"] == cc_id]
         kfold_array = []
@@ -129,21 +130,43 @@ if __name__ == "__main__":
             train_df = pd.concat(train_df, ignore_index=True)
 
             print ("Getting the DataLoaders...")
-            train_loader, scaler = mpr_get_train_loader(train_df)
-            val_loader = mpr_get_val_loader(val_df, scaler)
-            test_loader = mpr_get_test_loader(test_df)
+            if using_moldescs:
+                print("Scaling the molecular descriptors...")
+                train_df = add_moldescs(train_df, path2moldesc)
+                test_df = add_moldescs(test_df, path2moldesc)
+                val_df = add_moldescs(val_df, path2moldesc)
+                scaled_train_df, moldesc_scaler = get_scaled_moldescs_train(train_df) #Only needs the the scaler
+                # scaled_test_df = get_scaled_moldesc_testval(test_df, moldesc_scaler)
+                # scaled_val_df = get_scaled_moldesc_testval(val_df, moldesc_scaler)
 
-            print ("Building and training the model...")
-            mpnn, trainer = configure_and_train_mpnn(scaler,
-                                                     train_loader,
-                                                     val_loader,
-                                                     param_dict,
-                                                     results_path=res_path, #The checkpoints are saved in ./temp/
-                                                     save_model=False)
+                train_loader, scaler = mpr_get_train_loader(train_df, using_moldescs=using_moldescs)
+                val_loader = mpr_get_val_loader(val_df, scaler, using_moldescs=using_moldescs)
+                test_loader = mpr_get_test_loader(test_df, using_moldescs=using_moldescs)
+                mpnn, trainer = configure_and_train_mpnn_moldesc(scaler,
+                                                                 moldesc_scaler,
+                                                                 train_loader,
+                                                                 val_loader,
+                                                                 param_dict,
+                                                                 results_path=res_path,
+                                                                 save_model=False,
+                                                                 rm_ckpt=True)
+            else:
+                train_loader, scaler = mpr_get_train_loader(train_df, using_moldescs=using_moldescs)
+                val_loader = mpr_get_val_loader(val_df, scaler, using_moldescs=using_moldescs)
+                test_loader = mpr_get_test_loader(test_df, using_moldescs=using_moldescs)
+
+                print ("Building and training the model...")
+                mpnn, trainer = configure_and_train_mpnn(scaler,
+                                                         train_loader,
+                                                         val_loader,
+                                                         param_dict,
+                                                         results_path=res_path, #The checkpoints are saved in ./temp/
+                                                         save_model=False)
 
             test_pred = trainer.predict(mpnn, test_loader)
             test_pred = np.concatenate(test_pred, axis=0)
             res_table = get_res_table(test_df, test_pred, res_path, using_moldescs=using_moldescs, save_results=False)
+            all_results.append(res_table)
             mae, rmse, mre ,rel_max_error, rel_mean_error = metrics_from_dataframe(res_table)
             # This is extra
             metrics_dict ["cc_id"].append(cc_id)
@@ -162,8 +185,9 @@ if __name__ == "__main__":
     #Eliminate the ./temp_dir
     shutil.rmtree(Path(res_path))
 
-
+    all_results_df = pd.concat (all_results, ignore_index=True)
     results_df = pd.DataFrame(metrics_dict)
     print ("Writing all the results files.")
+    all_results_df.to_csv(os.path.join (path2res, "all_results.tsv"), sep='\t', index=False)
     write_model_per_repo_results(results_df, path2res)
     sys.exit(0)
