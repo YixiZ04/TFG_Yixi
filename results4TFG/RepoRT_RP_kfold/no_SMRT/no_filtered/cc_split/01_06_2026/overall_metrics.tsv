@@ -1,6 +1,0 @@
-metric	aggregated mean	standard deviation
-MAE	99.1142	42.7991
-RMSE	156.1541	78.4917
-MRE	37.0147	19.3048
-rel_max_rt_error	12.9971	6.4072
-rel_mean_rt_error	31.2422	15.4344
