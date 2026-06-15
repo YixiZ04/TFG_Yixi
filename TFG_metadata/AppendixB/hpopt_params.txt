@@ -1,0 +1,10 @@
+The search space in this optimization run is:
+dropout_rate: FloatDistribution(high=0.5, log=False, low=0.1, step=None)
+ffn_hidden_dim: IntDistribution(high=2000, log=True, low=1024, step=1)
+ffn_layers: IntDistribution(high=6, log=True, low=3, step=1)
+final_lr: FloatDistribution(high=0.0001, log=True, low=0.0001, step=None)
+init_lr: FloatDistribution(high=0.0001, log=True, low=0.0001, step=None)
+max_lr: FloatDistribution(high=0.001, log=True, low=0.001, step=None)
+mp_depth: IntDistribution(high=6, log=True, low=3, step=1)
+mp_hidden_dim: IntDistribution(high=600, log=True, low=400, step=1)
+warm_up_epochs: IntDistribution(high=2, log=True, low=2, step=1)
