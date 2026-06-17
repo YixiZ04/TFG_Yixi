@@ -15,13 +15,14 @@ import torch
 
 from pathlib import Path
 
-def get_dataloaders_with_moldesc (df, dataset = "SMRT"):
+def get_dataloaders_with_moldesc (df, dataset = "SMRT", split_by_scaffold=False):
     """
     A DATAFRAME with molecular descriptors is required.
     And the dataset should be introduced for getting the correct molecule representation.
     Note: As in this version only extra two molecular descriptors are used and are the same for both datasets
     this function should be useful for both datasets.
     IMPORTANT: This function does not introduce the chromatograpy conditions, but only monisotopic_mass and xlogp.
+    If split_by_scaffold is True, the train/val/test split is done by Bemis-Murcko scaffold.
     """
     # These are common for both datasets
     moniso_mws = df.loc[:, ["mono_iso_mass"]].values
@@ -40,9 +41,10 @@ def get_dataloaders_with_moldesc (df, dataset = "SMRT"):
     else:
         print(f"Check the dataset given: {dataset}")
         return None
+    split_type = "SCAFFOLD_BALANCED" if split_by_scaffold else "random"
     train_indices, val_indices, test_indices = data.make_split_indices(
         mols,
-        "random",
+        split_type,
         (0.8, 0.1, 0.1),
         seed=42,
     )
@@ -188,6 +190,5 @@ def get_res_table_moldesc (df, pred_array, test_indices):
                                 "pred_rt": pred_list,
                                 "diff": np.abs (pred_list - real_rt),})
     return res_table
-
 
 

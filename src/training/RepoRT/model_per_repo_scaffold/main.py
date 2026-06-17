@@ -93,7 +93,8 @@ if __name__ == "__main__":
             try:
                 temp_df = add_moldescs(temp_df, path2moldesc)
                 targets_scaler, mol_descs_scaler, train_loader, val_loader, test_loader, test_indices = get_dataloaders_with_moldesc(temp_df,
-                                                                                                           dataset="RepoRT")
+                                                                                                           dataset="RepoRT",
+                                                                                                           split_by_scaffold=True)
                 mpnn, trainer = configure_and_train_mpnn_moldesc(targets_scaler, mol_descs_scaler, train_loader, val_loader, param_dict, path2res)
                 test_pred = trainer.predict(mpnn, test_loader)
                 test_pred = np.concatenate(test_pred, axis=0)
@@ -147,5 +148,4 @@ if __name__ == "__main__":
 
     print ("The resuls written successfully! Exiting the program...")
     sys.exit(0)
-
 
