@@ -31,9 +31,9 @@ SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")         
 dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
 apply_grad_down_threshold = False                                                     # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = False                                                                     # Set to True if want to use molecular descriptors for the model
+using_moldescs = True                                                                     # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "01_06_2026/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "09_06_2026/") #Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     cc_id_array = np.unique(input_df ["cc_id"])
 
-    res_path = os.path.join ("./tmp_2/")           #Does not really matter, only for temporal saving
+    res_path = os.path.join ("./tmp_3/")           #Does not really matter, only for temporal saving
     os.makedirs(res_path, exist_ok=True)
 
     res_dfs_array = []
@@ -112,7 +112,6 @@ if __name__ == "__main__":
         temp_df_kf = KFold(n_splits=10,
                            random_state=RANDOM_SEED,
                            shuffle=True)
-
         for _,fold_index in temp_df_kf.split(temp_df):
             fold_df = temp_df.iloc[fold_index]
             kfold_array.append(fold_df)
@@ -120,6 +119,7 @@ if __name__ == "__main__":
         k = len(kfold_array)
 
         for i in range(k):
+            print (f"cc-id: {cc_id}, fold: {i}")
             test_df = kfold_array[i]
             val_df = kfold_array[(i + 1) % k]
             train_df = [
@@ -137,10 +137,10 @@ if __name__ == "__main__":
                 val_df = add_moldescs(val_df, path2moldesc)
                 scaled_train_df, moldesc_scaler = get_scaled_moldescs_train(train_df) #Only needs the the scaler
                 # scaled_test_df = get_scaled_moldesc_testval(test_df, moldesc_scaler)
-                # scaled_val_df = get_scaled_moldesc_testval(val_df, moldesc_scaler)
+                scaled_val_df = get_scaled_moldesc_testval(val_df, moldesc_scaler)
 
-                train_loader, scaler = mpr_get_train_loader(train_df, using_moldescs=using_moldescs)
-                val_loader = mpr_get_val_loader(val_df, scaler, using_moldescs=using_moldescs)
+                train_loader, scaler = mpr_get_train_loader(scaled_train_df, using_moldescs=using_moldescs)
+                val_loader = mpr_get_val_loader(scaled_val_df, scaler, using_moldescs=using_moldescs)
                 test_loader = mpr_get_test_loader(test_df, using_moldescs=using_moldescs)
                 mpnn, trainer = configure_and_train_mpnn_moldesc(scaler,
                                                                  moldesc_scaler,
