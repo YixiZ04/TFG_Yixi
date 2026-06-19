@@ -52,7 +52,7 @@ def _obtain_overall_agg_metrics(metric_df, n_molecule_col) -> pd.DataFrame:
     return pd.DataFrame(temp_dict)
 
 def main() -> None:
-    seed_path = os.path.join(".", "results4TFG", "RepoRT_RP_kfold", "with_SMRT", "no_filtered",
+    seed_path = os.path.join(".", "results4TFG", "RepoRT_RP_kfold_moldesc", "with_SMRT", "no_filtered",
                               "model_per_repo", "09_06_2026/")
     path2input = os.path.join(seed_path, "all_folds.tsv")
 
