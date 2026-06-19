@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -61,16 +62,15 @@ def main () -> None:
     only_retained_df = pd.read_csv(input_path, sep="\t")
     non_retained_df = pd.read_csv (dropped_path, sep="\t")
     df = pd.concat([only_retained_df, non_retained_df], ignore_index=True)
-
     print ("Making the saving directory...")
-    path2res = os.path.join (os.getcwd(), "TFG_metadata","retention_analysis/")
-    path2fig = os.path.join (path2res, "figures/")
-    os.makedirs(path2res, exist_ok=True)
+    path2fig = os.path.join (os.getcwd(), "TFG_metadata","AppendixA", "results_plots/")
+
+
     os.makedirs(path2fig, exist_ok=True)
 
     cc_id_array = df["cc_id"].unique()
 
-    temp_df_array = []
+    # temp_df_array = []
     print ("Iteration through data...")
     for cc_id in cc_id_array:
         temp_filename = f"{cc_id}_retention_plot.png"
@@ -82,13 +82,9 @@ def main () -> None:
                           temp_result,
                           path2fig,
                           temp_filename)
-        temp_df_array.append(temp_annotated_df)
     print ("Saving the datatable")
-    final_df = pd.concat(temp_df_array, ignore_index=True)
-    path2file = os.path.join (path2res, "annotated_processed_rt_data.tsv")
-    final_df.to_csv(path2file, sep="\t", index=False)
 
-    print (f"All the results are saved in {path2res}")
+    print (f"All the results are saved in {path2fig}")
 
 
 if __name__ == "__main__":
