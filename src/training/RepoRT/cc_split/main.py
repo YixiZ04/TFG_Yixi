@@ -1,19 +1,12 @@
 """
-Name: training/RepoRT/cc_split/main.py
-Author: Yixi Zhang.
-Date: March 2026
-Version: 1.3.
-Usage: Run the file to train and configure a MPNN using chemprop and processed data randomly split from RepoRT.
-If the input datafiles do not exist, they will be built.
-Update (1.1.): adapted to splitted_sets_functions.py version 1.1.
-Update (1.2.): adapted to splitted_sets_functions.py version 1.2. (Input data scaling, aka metadatada and gradient data)
-Update (1.3.): added an option to evaluate different datasets, for now, two types in total:
-    1. All RepoRT data with SMRT removed. (no_SMRT)
-    2. All RepoRT but downsampled those Repositories with >5000 molecuels (with_SMRT).
-    If in the future, more datasets shuold be evaluated, this Script is easily extendable.
-    (This could also be considered as adapting the version 1.2. of data_processing.py)
-NOTE: Change dirname in line 28 to customize the saving directory name.
-Update (1.4); added the option to train model with molecular descriptors.
+    Name: training/RepoRT/cc_split/main.py
+    Author: Yixi Zhang.
+    Date: March 2026
+    Version: 1.3.
+    Usage: Run the file to train and configure a MPNN using chemprop and processed data split by cc from RepoRT.
+    If the input datafiles do not exist, they will be built.
+    Note: this Script is not used for the results of this bachelor's thesis, as 10-fold cross-validation has been implemented.
+    But it is not eliminated because it once was a part of the project.
 """
 
 #IMPORT MODULES
@@ -26,21 +19,21 @@ from src.training.RepoRT.cc_split.perform_cc_splitting import cc_split
 
 # DEFINE PARAMETERS
 
-SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
-apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
+SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                             # This is the source directory that contains all processed files
+dataset_type = "no_SMRT"                                                                            # Or with_SMRT, depends on the type of input dataset to use.
+apply_grad_down_threshold = False                                                                   # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "prueba/") #Change "dirname" for any name you want.
+using_moldescs = False                                                                              # Set to True if want to use molecular descriptors for the model
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                                   # Changes the path where to save the results files
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "cc_split", "dirname/")  # Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
 param_dict = {
-    "mp_hidden_dim": 451,                             # Hidden dimension of the message passing (MP) part
-    "mp_depth": 4,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 1493,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 4,                                  # Number of layers for the ffn.
+    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
+    "mp_depth": 3,                                    # Depth/Number of Layers of the MP
+    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (FFN). This is the regressor
+    "ffn_layers": 1,                                  # Number of layers for the FFN.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
@@ -48,10 +41,9 @@ param_dict = {
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
     "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
-    "metric_list": [nn.MAE(), nn.RMSE()],
-    "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
+    "metric_list": [nn.MAE(), nn.RMSE()],             # Can be ignored in this case. They are calculated apart.
+    "accelerator": "auto",                            # Uses GPU if CUDA available. CPU when it's not.
 }
-
 
 
 if __name__ == "__main__":

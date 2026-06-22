@@ -1,7 +1,10 @@
 """
     Name: model_per_repo_scaffold.main
     Author: Yixi Zhang
-    The splitting type within each repository is by Bemis-Murcko scaffold. Which implies that in the train-test-val, each will contain different molecule class.
+    The splitting type within each repository is by Bemis-Murcko scaffold.
+    Which implies that in the train-test-val, each will contain different molecule class.
+
+    The param_dict contains the hyperparameters used in this project.
 """
 
 # IMPORT THE FUNCTIONS NEEDED
@@ -19,31 +22,31 @@ from src.training.functions.splitted_sets_functions import *
 from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
-SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
-apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
+SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                                                 # This is the source directory that contains all processed files
+dataset_type = "with_SMRT"                                                                                              # NO point evaluating dataset eliminated SMRT.
+apply_grad_down_threshold = False                                                                                       # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = True                                                                      # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo_scaffold", "01_06_2026/") #Change "dirname" for any name you want.
+using_moldescs = False                                                                                                   # Set to True if want to use molecular descriptors for the model
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                                                       # Changes the path where to save the results files
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo_scaffold", "dirname/")       # Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
 
 param_dict = {
-    "mp_hidden_dim": 460,                             # Hidden dimension of the message passing (MP) part
-    "mp_depth": 4,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 1400,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 3,                                  # Number of layers for the ffn.
-    "init_lr": 1e-4,                                  # The initial learning rate (lr)
-    "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
-    "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
-    "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
-    "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.12,                              # Dropout rate. 0 is default.
-    "batch_norm": True,                               # True if want to apply batch_norm
-    "metric_list": [nn.MAE(), nn.RMSE()],
-    "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
+    "mp_hidden_dim": 460,                              # Hidden dimension of the message passing (MP) part
+    "mp_depth": 4,                                     # Depth/Number of Layers of the MP
+    "ffn_hidden_dim": 1400,                            # Hidden layer for the feed-forward network (FFN). This is the regressor
+    "ffn_layers": 3,                                   # Number of layers for the FFN.
+    "init_lr": 1e-4,                                   # The initial learning rate (lr)
+    "max_lr": 1e-3,                                    # Max lr will be reached in after the warm_up epochs.
+    "final_lr": 1e-4,                                  # The lr set for the rest of epochs.
+    "warm_up_epochs": 2,                               # Number of epochs to reach the max_lr
+    "max_epochs": 1000,                                # Set to a smaller number as the datasets here are much smaller.
+    "dropout_rate": 0.12,                              # Dropout rate.
+    "batch_norm": True,                                # True if want to apply batch_norm
+    "metric_list": [nn.MAE(), nn.RMSE()],              # Can be eliminated, all the metrics are calculated apart.
+    "accelerator": "auto",                             # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
 
 # RUNNING THE SCRIPT
@@ -87,7 +90,7 @@ if __name__ == "__main__":
     results_array = []          # This array will be used store dfs to build a large df for results, where all the metrics will be calculated.
     for cc_id in cc_id_array:
         temp_df = df[df["cc_id"] == cc_id]        # This id can be directly used because when imported from tsv file, those "0"s would be eliminated.
-
+        print (f"running {cc_id}")
         # Build a model for each repo.
         if using_moldescs:
             try:

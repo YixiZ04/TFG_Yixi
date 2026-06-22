@@ -1,3 +1,10 @@
+"""
+    Trains a D-MPNN model for 10-fold cross-validation scaffold split. This was design to test if the model can generalize to unseen
+    molecular types defined by Bemis-Murcko scaffold.
+
+    The param_dict contains the values of hyperparameters used for the project.
+"""
+
 #IMPORT MODULES
 import os
 import sys
@@ -8,39 +15,37 @@ from src.training.functions.k_fold_functions import split_dataset_into_k_folds, 
 from src.training.RepoRT.scaffold_split.perform_scaffold_split import ms_split
 #K-Fold parameters
 
-K = 10                                                                           # By default, 5 folds will be made.
-ROOT_NAME = "k-fold"
-SIZE_DICT = {f"k-fold{fold_index}":0 for fold_index in range(1, K+1)}           # This will store the size of each split
-OBJECTIVE_DICT = {f"k-fold{fold_index}":[] for fold_index in range(1, K+1)}         # This will store the cc or murcko scaffold
+K = 10                                                                                                      # By default, 10 folds will be made.
+SIZE_DICT = {f"k-fold{fold_index}":0 for fold_index in range(1, K+1)}                                       # This will store the size of each split
+OBJECTIVE_DICT = {f"k-fold{fold_index}":[] for fold_index in range(1, K+1)}                                 # This will store the cc or murcko scaffold
 
 
 # DEFINE PARAMETERS
-SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "no_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
-apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
+SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                                     # This is the source directory that contains all processed files
+dataset_type = "no_SMRT"                                                                                    # Or with_SMRT, depends on the type of input dataset to use.
+apply_grad_down_threshold = False                                                                           # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
+using_moldescs = False                                                                                      # Set to True if want to use molecular descriptors for the model
 moldesc_dir = "RepoRT_RP_kfold_moldesc" if using_moldescs else "RepoRT_RP_kfold"
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "scaffold_split", "Prueba/") #Change "dirname" for any name you want.
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "scaffold_split", "dirname/")    # Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
 param_dict = {
-    "mp_hidden_dim": 460,                             # Hidden dimension of the message passing (MP) part
-    "mp_depth": 4,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 1400,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers":3,                                  # Number of layers for the ffn.
-    "init_lr": 1e-4,                                  # The initial learning rate (lr)
-    "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
-    "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
-    "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
-    "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.12,                              # Dropout rate. 0 is default.
-    "batch_norm": True,                               # True if want to apply batch_norm
+    "mp_hidden_dim": 460,                              # Hidden dimension of the message passing (MP) part
+    "mp_depth": 4,                                     # Depth/Number of Layers of the MP
+    "ffn_hidden_dim": 1400,                            # Hidden layer for the feed-forward network (FFN). This is the regressor
+    "ffn_layers": 3,                                   # Number of layers for the FFN.
+    "init_lr": 1e-4,                                   # The initial learning rate (lr)
+    "max_lr": 1e-3,                                    # Max lr will be reached in after the warm_up epochs.
+    "final_lr": 1e-4,                                  # The lr set for the rest of epochs.
+    "warm_up_epochs": 2,                               # Number of epochs to reach the max_lr
+    "max_epochs": 1000,                                # Set to a smaller number as the datasets here are much smaller.
+    "dropout_rate": 0.12,                              # Dropout rate.
+    "batch_norm": True,                                # True if want to apply batch_norm
     "metric_list": [nn.MAE(), nn.RMSE()],
-    "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
+    "accelerator": "auto",                             # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
 }
-
 
 
 # RUNNING THE SCRIPT

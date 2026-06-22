@@ -2,18 +2,15 @@
 Name: RepoRT_MPNN_each_repo.py
 Author: Yixi Zhang
 Date: March 2026/April 2026
-Version: 1.2.
-Usege: Builds individuals MPNN using data from every RepoRT's subsets (0001, 0002...
+Usege: Builds a MPNN model for each cc-ID
 In total, there will be 3 main result files saved in the result directory (should be defined):
     1. metric.txt. This file contains the aggregated metrics (MAE, RMSE, %errors) calculated from Results.tsv. Might not be as interesting as the last result file,
     but it is interesting if wanted to have a quick idea of the difference of the results.
     2. Parameters.txt: a txt file containing the parameters used for building the MPNN. It is shared by all repositories.
     3. Results.tsv: a tsv file containing the prediction results for each subset of RepoRT.
     4. metrics_per_cc.tsv. This is the original "Metrics.tsv", but this now contains more results metrics (%error to mean and max RT).
-Update: This will use the total processed RepoRT dataset for making sure that the repos used in this Script corresponds with the repos remaining after processing.
-With this update, very similar Scripts will be removed and the results will be comparable to those obtained with models trained using all data.
-The result files are the exact same as the result files for other cases (random_split e.g.).The only difference being on how those results are obtained.
-Update (1.2): added option to train models with moldescs
+
+Note: This has been deprecated as well, because 10-fold cross-validation was implemented for this case.
 """
 
 # IMPORT THE FUNCTIONS NEEDED
@@ -31,31 +28,31 @@ from src.training.functions.splitted_sets_functions import *
 from src.RepoRT_data_processing.RepoRT_processing import get_processed_df_from_raw
 
 # DEFINE THE PARAMETERS. HERE DEFINED ARE THE DEFAULT VALUES OF CHEMPROP
-SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                        # This is the source directory that contains all processed files
-dataset_type = "with_SMRT"                                                                  # Or with_SMRT, depends on the type of input dataset to use.
-apply_grad_down_threshold = False                                                           # Set to True if want to use the filtered by grad_down_threshold
+SOURCE_PATH = os.path.join(".", "data", "RepoRT_RP", "processed_data/")                                         # This is the source directory that contains all processed files
+dataset_type = "with_SMRT"                                                                                      # No purpose evaluating dataset with no SMRT. No interference.
+apply_grad_down_threshold = False                                                                               # Set to True if want to use the filtered by grad_down_threshold
 filtering = "filtered" if apply_grad_down_threshold else "no_filtered"
-using_moldescs = False                                                                      # Set to True if want to use molecular descriptors for the model
-moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                              # Changes the path where to save the results files
-path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "29_05_2026/") #Change "dirname" for any name you want.
+using_moldescs = False                                                                                          # Set to True if want to use molecular descriptors for the model
+moldesc_dir = "RepoRT_moldesc" if using_moldescs else "RepoRT_RP"                                               # Changes the path where to save the results files
+path2res = os.path.join(".", "logs", moldesc_dir, dataset_type, filtering, "model_per_repo", "dirname/")        # Change "dirname" for any name you want.
 path2moldesc = os.path.join (".", "data","complete_moldesc.tsv")
 
 
 
 param_dict = {
-    "mp_hidden_dim": 460,                             # Hidden dimension of the message passing (MP) part
-    "mp_depth": 4,                                    # Depth/Number of Layers of the MP
-    "ffn_hidden_dim": 1400,                            # Hidden layer for the feed-forward network (ffn). This is the regressor
-    "ffn_layers": 3,                                  # Number of layers for the ffn.
+    "mp_hidden_dim": 300,                             # Hidden dimension of the message passing (MP) part
+    "mp_depth": 3,                                    # Depth/Number of Layers of the MP
+    "ffn_hidden_dim": 300,                            # Hidden layer for the feed-forward network (FFN). This is the regressor
+    "ffn_layers": 1,                                  # Number of layers for the FFN.
     "init_lr": 1e-4,                                  # The initial learning rate (lr)
     "max_lr": 1e-3,                                   # Max lr will be reached in after the warm_up epochs.
     "final_lr": 1e-4,                                 # The lr set for the rest of epochs.
     "warm_up_epochs": 2,                              # Number of epochs to reach the max_lr
     "max_epochs": 1000,                               # Set to a smaller number as the datasets here are much smaller.
-    "dropout_rate": 0.12,                              # Dropout rate. 0 is default.
+    "dropout_rate": 0.1,                              # Dropout rate. 0 is default.
     "batch_norm": True,                               # True if want to apply batch_norm
-    "metric_list": [nn.MAE(), nn.RMSE()],
-    "accelerator": "auto",                            # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
+    "metric_list": [nn.MAE(), nn.RMSE()],             # Can be ignored in this case. They are calculated apart.
+    "accelerator": "auto",                            # Uses GPU if CUDA available. CPU when it's not.
 }
 
 # RUNNING THE SCRIPT
