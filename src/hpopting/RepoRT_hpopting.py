@@ -1,14 +1,14 @@
 """
-Name: RepoRT_hpopting.py
-Author: Yixi Zhang
-Date: March 2026
-Version: 1.0.
-Usage: This file is used for doing hyperparameter optimization with SMRT dataset using Optuna. The range for the hyperparameters to tune should be defined.
-Two result files are gotten from this Script:
-    1. A txt file containing the searching space defined.
-    2. A tsv file containing the results of the hyperparameter optimization.
-IMPORTANT: split_type and dataset_type should be correctly defined. This version adapted the versions 1.2. for all Scripts from src.training.RepoRT.
-And the results saving directory denpends on the split type and dataset_type, but the root dir is ./logs/hpopting/RepoRT/...
+    Name: RepoRT_hpopting.py
+    Author: Yixi Zhang
+    Date: March 2026
+    Version: 1.0.
+    Usage: This file is used for doing hyperparameter optimization with/without SMRT using Optuna. The range for the hyperparameters to tune should be defined.
+    Two result files are gotten from this Script:
+        1. A txt file containing the searching space defined.
+        2. A tsv file containing the results of the hyperparameter optimization.
+    And the results saving directory depends on the split type and dataset_type, but the root dir is ./logs/hpopting/RepoRT/...
+    NOTE: Change the search space in build_config (trial) function, as for now, the search space is the default values of Chemprop.
 """
 
 # IMPORT MODULES
@@ -27,12 +27,12 @@ from src.training.RepoRT.cc_split.perform_cc_splitting import cc_split
 from src.training.RepoRT.cc_scaffold_split.perform_cc_scaffold_split import cc_ms_split
 
 # DEFINE THE SEARCH SPACE FOR THE OPTIMIZATION
-num_trails = 2                                                                              # This is the numbers of trials to run, set to 2 for demonstration purpose.
-dataset_type = "no_SMRT"                                                                    # Or "no_SMRT", depends on which dataset you want to use.
-split_type = "random_split"                                                                 # "cc_split", "scaffold_split", "cc_scaffold_split"
-apply_low_grad_filter = False                                                               # Set to True if want to apply low gradient filter.
+num_trails = 2                                                                                          # This is the numbers of trials to run, set to 2 for demonstration purpose.
+dataset_type = "no_SMRT"                                                                                # Or "with_SMRT", depends on which dataset you want to use.
+split_type = "random_split"                                                                             # "cc_split", "scaffold_split", "cc_scaffold_split"
+apply_low_grad_filter = False                                                                           # Set to True if want to apply low gradient filter.
 input_dir = os.path.join (".", "data", "RepoRT_RP", "processed_data/", dataset_type, split_type + "/")
-path2res = os.path.join (".", "logs", "hpopting","RepoRT_RP", dataset_type, split_type, "dirname/" )  # This is the result path to save the results. Change it when run a hyperparameter optimization.
+path2res = os.path.join (".", "logs", "hpopting","RepoRT_RP", dataset_type, split_type, "dirname/" )    # This is the result path to save the results. Change it when run a hyperparameter optimization.
 
 def build_config (trial):
     """
@@ -50,7 +50,7 @@ def build_config (trial):
         "final_lr": trial.suggest_float("final_lr", 1e-4, 1e-4, log=True),                                      # The lr set for the rest of epochs.
         "warm_up_epochs": trial.suggest_int("warm_up_epochs", 2, 2, log=True),                                  # Number of epochs to reach the max_lr
         "max_epochs": 1000,                                                                                     # Set a huge number as early stopping mechanism is implemented here
-        "dropout_rate": trial.suggest_float("dropout_rate", 0, 0),  # Dropout rate. 0 is default.
+        "dropout_rate": trial.suggest_float("dropout_rate", 0, 0),                                              # Dropout rate. 0 is default.
         "batch_norm": True,                                                                                     # True if want to apply batch_norm
         # "metric_list": [nn.MAE(), nn.RMSE()],                                                                 # Metric. Not really needed for this task.
         "accelerator": "auto",                                                                                  # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.

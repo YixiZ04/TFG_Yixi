@@ -1,15 +1,15 @@
 """
-Name: SMRT_hpopting.py
-Author: Yixi Zhang
-Date: March 2026
-Version: 1.1.
-Usage: This file is used for doing hyperparameter optimization with SMRT dataset using Optuna. The range for the hyperparameters to tune should be defined.
-Two result files are gotten from this Script:
-    1. A txt file containing the searching space defined.
-    2. A tsv file containing the results of the hyperparameter optimization.
-Update (1.1.): Reorganized the structure of the file and the directory. But the usage remains the exact same. Also, an option to do hyperparameters optimization using
-only retained molecules is given.
-NOTE: The results would be saved in ./logs/hpopting/SMRT/...
+    Name: SMRT_hpopting.py
+    Author: Yixi Zhang
+    Date: March 2026
+    Version: 1.1.
+    Usage: This file is used for doing hyperparameter optimization with SMRT dataset using Optuna. The range for the hyperparameters to tune should be defined.
+    Two result files are gotten from this Script:
+        1. A txt file containing the searching space defined.
+        2. A tsv file containing the results of the hyperparameter optimization.
+    The results would be saved in ./logs/hpopting/SMRT/...
+    NOTE: Change the search space in build_config (trial) function, as for now, the search space is the default values of Chemprop.
+    Also, this Script has been basically deprecated as RepoRT_hpopting.py was designed.
 """
 
 # IMPORT MODULES
@@ -26,10 +26,10 @@ from src.hpopting.hpopting_functions import *
 
 
 # DEFINE THE SEARCH SPACE FOR THE OPTIMIZATION
-num_trails = 2                                                                                  # This is the numbers of trials to run, set to 2 for demonstration purpose.
-save_dir_name = "dirname/"                                                                           # This is the result path to save the results. Change it when run a hyperparameter optimization.
-csv_data_file = os.path.join (".", "data", "no_extra_mol_desc", "SMRT_data.csv")                # Path to the SMRT datafile.
-only_retained = True                                                                            # Set to False if want to use all data.
+num_trails = 2                                                                                                  # This is the numbers of trials to run, set to 2 for demonstration purpose.
+save_dir_name = "dirname/"                                                                                      # This is the result path to save the results. Change it when run a hyperparameter optimization.
+csv_data_file = os.path.join (".", "data", "SMRT", "SMRT_data.csv")                                             # Path to the SMRT datafile.
+only_retained = True                                                                                            # Set to False if want to use all data.
 def build_config (trial):
     """
     Here all the parameters are set to default values for a demonstration purpose.
@@ -46,7 +46,7 @@ def build_config (trial):
         "final_lr": trial.suggest_float("final_lr", 1e-4, 1e-4, log=True),                                      # The lr set for the rest of epochs.
         "warm_up_epochs": trial.suggest_int("warm_up_epochs", 2, 2, log=True),                                  # Number of epochs to reach the max_lr
         "max_epochs": 1000,                                                                                     # Set a huge number as early stopping mechanism is implemented here
-        "dropout_rate": trial.suggest_float("dropout_rate", 0, 0),  # Dropout rate. 0 is default.
+        "dropout_rate": trial.suggest_float("dropout_rate", 0, 0),                                              # Dropout rate. 0 is default.
         "batch_norm": True,                                                                                     # True if want to apply batch_norm
         # "metric_list": [nn.MAE(), nn.RMSE()],                                                                 # Metric. Not really needed for this task.
         "accelerator": "auto",                                                                                  # If GPU and CUDA available change to "gpu". Or can set "cpu" as well.
